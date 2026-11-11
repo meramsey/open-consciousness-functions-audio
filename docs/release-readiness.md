@@ -89,3 +89,28 @@ Large uploads/read-backs require independent production supervision when run.
 See GitHub's [release API](https://docs.github.com/en/rest/releases/releases) and
 [asset API](https://docs.github.com/en/rest/releases/assets) for remote semantics.
 Do not use a successful mock test as evidence that public assets exist.
+
+## Exact A6 collection continuation
+
+The corrected named A6 collection contains 58 canonical functions plus
+Preparation Learning, en-US, edition 0.1.0, Mike — Original Voice only. The
+owner has approved public release of this batch and voice and confirmed rights
+to the exact Cosmic Path covers, including repaired Preparation Learning.
+Earlier pending-rights statements above describe historical checkpoints.
+Historical candidate approval fields and BETA / PRIVATE cover footers remain
+unchanged; current permission is recorded privately against exact asset hashes.
+The imported artwork is not assigned a new license by this confirmation.
+
+The local full-batch publication manifest has SHA-256
+`48cb39bcc3dfd7f7e211b3093cd927c3a790cd9ad28d6b47faad956014c85c14`.
+It describes 118 audio files, 59 covers, 236 transcript/subtitle files, 59
+technical receipts and six split collection ZIPs: 478 content assets, plus
+three public controls. The separate two-session packet is a technical fixture
+and must never substitute for this release. Local exports and originals are
+retained outside Git; the hash is an identity, not proof of publication.
+
+Final generic artwork validation includes exact JPEG entropy boundaries, beyond
+Pillow's permissive decoding. All actual batch covers are PNG and remain byte
+identical. Final source validation, current-byte verification, exact-head CI,
+review and independently supervised remote upload/read-back remain required.
+No public download or deployed-library availability is asserted here.
