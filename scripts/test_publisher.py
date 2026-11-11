@@ -222,6 +222,89 @@ class PublisherTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "another manifest"):
             self.run_publish()
 
+    def test_identity_persisted_before_initial_asset_lookup(self):
+        import json
+
+        def interrupted_lookup(release_id):
+            raise ConnectionError("asset lookup interrupted")
+
+        self.remote.list_assets = interrupted_lookup
+        with self.assertRaises(ConnectionError):
+            self.run_publish()
+        receipt = json.loads(self.receipt.read_text())
+        self.assertEqual(receipt["release_id"], self.remote.release["id"])
+        self.assertEqual(receipt["verified_assets"], [])
+        self.assertEqual(self.remote.uploads, 0)
+
+    def test_identity_persisted_before_first_asset_verification(self):
+        import json
+
+        self.remote.interrupt = True
+        with self.assertRaises(ConnectionError):
+            self.run_publish()
+        receipt = json.loads(self.receipt.read_text())
+        self.assertEqual(receipt["release_id"], self.remote.release["id"])
+        self.assertEqual(receipt["verified_assets"], [])
+
+    def test_missing_release_after_first_upload_failure_is_never_recreated(self):
+        self.remote.interrupt = True
+        with self.assertRaises(ConnectionError):
+            self.run_publish()
+        self.remote.release = None
+        with self.assertRaisesRegex(ValueError, "never recreate"):
+            self.run_publish()
+        self.assertIsNone(self.remote.release)
+        self.assertEqual(self.remote.uploads, 1)
+
+    def test_replaced_release_after_first_readback_failure_is_never_adopted(self):
+        self.remote.corrupt = True
+        with self.assertRaisesRegex(ValueError, "checksum"):
+            self.run_publish()
+        self.remote.release["id"] = 999
+        self.remote.corrupt = False
+        with self.assertRaisesRegex(ValueError, "replaced"):
+            self.run_publish()
+        self.assertEqual(self.remote.uploads, 1)
+
+    def _terminal_mutation_fails(self, change, message):
+        import json
+
+        self.approval["publish"] = True
+        original = self.remote.finalize
+
+        def mutate(release_id):
+            original(release_id)
+            change()
+
+        self.remote.finalize = mutate
+        with self.assertRaisesRegex(ValueError, message):
+            self.run_publish(finalize=True)
+        self.assertNotEqual(
+            json.loads(self.receipt.read_text())["phase"], "published-verified"
+        )
+        self.assertEqual(self.remote.finishes, 1)
+        self.assertEqual(self.remote.uploads, 4)
+
+    def test_finalization_rechecks_manifest_marker(self):
+        self._terminal_mutation_fails(
+            lambda: self.remote.release.update(body="foreign manifest"), "not confirmed"
+        )
+
+    def test_finalization_rechecks_release_tag(self):
+        self._terminal_mutation_fails(
+            lambda: self.remote.release.update(tag_name="another-tag"), "not confirmed"
+        )
+
+    def test_finalization_rechecks_asset_identity(self):
+        self._terminal_mutation_fails(
+            lambda: self.remote.assets[0].update(id=999), "inventory changed"
+        )
+
+    def test_finalization_rechecks_asset_size(self):
+        self._terminal_mutation_fails(
+            lambda: self.remote.assets[0].update(size=999), "inventory changed"
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -74,6 +74,9 @@ lock requires process-identity reconciliation before removal. Network errors
 never mean a release is absent. Retry resumes by reading remote state and
 hashing downloaded bytes, not by clobbering an asset. A missing or replaced
 previously recorded release is a blocker; it is not automatically recreated.
+The validated release ID is saved before the first asset operation. Final
+publication rechecks the tag, exact manifest marker and asset inventory after
+finalization before writing a successful terminal receipt.
 
 All assets are verified locally before upload and copied into temporary verified
 staging immediately before each write. Only one staged audio file is needed at

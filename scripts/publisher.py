@@ -96,6 +96,7 @@ def _publish(
     )
     release_id = release["id"]
     receipt["release_id"] = release_id
+    save_receipt(receipt_path, receipt)
     expected = {asset["remote_filename"]: asset for asset in manifest["assets"]}
     controls = control_artifacts(manifest)
     for name, data in controls.items():
@@ -182,7 +183,10 @@ def _publish(
     # Re-read immediately before final mutation to catch concurrent changes.
     fresh = remote.find_release(tag)
     require(
-        fresh and fresh["id"] == release_id and fresh.get("body") == marker,
+        fresh
+        and fresh["id"] == release_id
+        and fresh.get("tag_name") == tag
+        and fresh.get("body") == marker,
         "release changed during verification",
     )
     assets = remote.list_assets(release_id)
@@ -195,9 +199,19 @@ def _publish(
         remote.finalize(release_id)
         fresh = remote.find_release(tag)
         require(
-            fresh and fresh["id"] == release_id and fresh["draft"] is False,
+            fresh
+            and fresh["id"] == release_id
+            and fresh["draft"] is False
+            and fresh.get("tag_name") == tag
+            and fresh.get("body") == marker,
             "publication was not confirmed",
         )
+    terminal_assets = remote.list_assets(release_id)
+    require(
+        {(a["name"], a["id"], a["size"], a["state"]) for a in terminal_assets}
+        == {(a["name"], a["id"], a["size"], a["state"]) for a in by_name.values()},
+        "remote inventory changed before terminal verification",
+    )
     if not fresh["draft"]:
         receipt["published_release_id"] = release_id
     receipt["phase"] = "draft-verified" if fresh["draft"] else "published-verified"
