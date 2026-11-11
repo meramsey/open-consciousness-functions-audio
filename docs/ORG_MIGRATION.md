@@ -30,7 +30,9 @@ The owner's handoff records paused publisher/controllers, MainPID=0 and stopped
 watchdog timers. A later read-only systemd check found the release service inactive
 with MainPID=0, but `ocf-codex-release-20261111-watchdog.timer` active/waiting;
 the continuation watchdog timer remained inactive. This is a transfer blocker
-until the responsible operator reconciles the hold. No services were changed.
+until the release coordinator reconciles the hold. The coordinator owns the
+current service-state verification; this preparation must not modify services.
+No services were changed.
 Recheck actual process identities before transfer; do not restart services. Prior release owner `01a1c834-7486-73c2-8c2f-13f7c512577b` stays paused.
 
 ## Pre-transfer go/no-go
@@ -103,11 +105,13 @@ for the complete new manifest, rights and final publication, with a new receipt.
 
 The current publisher intentionally cannot adopt draft 441878809 with a different
 marker or inventory. If a new approved packet is chosen, it requires a separately
-authorized new draft/tag and uploads, leaving the frozen draft intact. If reusing
-the existing draft without changing any uploaded bytes is required, stop: a
-separately reviewed migration attestation/protocol is needed to bind the old
-manifest to the new destination. No such attestation is implemented or implied by
-this change. Transfer alone grants neither path authorization.
+authorized new draft/tag and uploads, leaving the frozen draft intact. For reuse of the existing draft without changing uploaded bytes, use the offline
+[transfer reconciliation protocol](TRANSFER_PROTOCOL.md). It validates complete
+before/after evidence and a new exact approval, producing only a publication-held
+result. It does not make the ordinary publisher accept a legacy manifest. The
+dedicated finalizer and trusted catalog-attestation integration are specified as
+later publication work; they remain disabled. Transfer alone grants neither path
+authorization, and migration does not require reuploading the preserved draft.
 
 ## ocfproject.org / Cloudflare cutover
 

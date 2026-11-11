@@ -375,6 +375,15 @@ def checksums(manifest):
 def control_artifacts(manifest):
     """Deterministic public metadata, with no local paths or approval identities."""
     validate_manifest(manifest)
+    return _control_artifacts(manifest)
+
+
+def _control_artifacts(manifest):
+    """Encode an already validated manifest; not an authorization boundary.
+
+    The transfer reconciler uses this for read-only legacy control verification.
+    All ordinary publication entry points retain strict destination validation.
+    """
     notes = [
         "# OCF audio edition " + manifest["edition"],
         "",

@@ -201,3 +201,7 @@ directories for diagnosis. Keep the complete packet outside Git.
 See [ORG_MIGRATION.md](ORG_MIGRATION.md). These destination changes are staged for
 transfer, not authorization to publish or modify the frozen draft. Existing
 approvals cannot authorize a manifest with a changed repository or tag.
+
+Read-only transferred-draft evidence validation is available via
+[`reconcile_transfer.py`](TRANSFER_PROTOCOL.md). Its separate approval authorizes
+reconciliation only; its result cannot resume or finalize publication.
