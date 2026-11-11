@@ -80,13 +80,13 @@ def build_catalog(
             trusted = registry if registry is not None else load_registry()
             bundle = trusted.resolve(manifest, release["id"])
             tag_ref = None
-            if bundle["schema_version"] == 2:
+            if bundle["schema_version"] == 3:
                 require(callable(read_tag), "v2 catalog needs current tag lookup")
                 tag_ref = read_tag(release["tag_name"])
             entry = transferred_release_entry(
                 manifest, release, assets, registry=trusted, tag_ref=tag_ref
             )
-            if bundle["schema_version"] == 2:
+            if bundle["schema_version"] == 3:
                 require(
                     read_tag(release["tag_name"]) == tag_ref,
                     "v2 catalog tag changed during verification",

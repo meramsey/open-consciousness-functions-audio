@@ -15,6 +15,7 @@ from pathlib import Path
 from urllib.parse import quote
 
 from github_publisher import GitHub
+from public_transfer_evidence import verify_private_evidence
 from publication import (
     REPOSITORY,
     _verify_approval_digest,
@@ -87,16 +88,54 @@ def commit(value):
     )
 
 
-def verify_final_approval(bundle, registry, original, reconciliation, approval, now):
+def verify_final_approval(
+    bundle,
+    registry,
+    original,
+    reconciliation,
+    approval,
+    now,
+    *,
+    private_historical=None,
+):
+    try:
+        return _verify_final_approval(
+            bundle,
+            registry,
+            original,
+            reconciliation,
+            approval,
+            now,
+            private_historical=private_historical,
+        )
+    except (ValueError, KeyError, TypeError, OSError):
+        if bundle.get("schema_version") == 3:
+            raise ValueError(
+                "private transfer evidence or approval validation failed"
+            ) from None
+        raise
+
+
+def _verify_final_approval(
+    bundle,
+    registry,
+    original,
+    reconciliation,
+    approval,
+    now,
+    *,
+    private_historical=None,
+):
     manifest, attestation = bundle["manifest"], bundle["attestation"]
     legacy_controls(manifest)
     _verify_approval_digest(identity(manifest), original)
     require(
         timestamp(original["approved_at"]) <= now, "original approval is from future"
     )
-    v2 = bundle["schema_version"] == 2
+    v2 = bundle["schema_version"] == 3
     if v2:
         require(bundle.get("mode") == MODE, "unsupported transfer mode")
+        verify_private_evidence(bundle, private_historical)
         require(
             identity(original)
             == attestation["original_rights_approval_canonical_sha256"],
@@ -104,7 +143,7 @@ def verify_final_approval(bundle, registry, original, reconciliation, approval, 
         )
         verify_reconciliation_v2(
             manifest,
-            bundle["historical"],
+            private_historical,
             bundle["after"],
             attestation,
             reconciliation,
@@ -260,6 +299,7 @@ def finalize_transfer(
     *,
     execute=False,
     now=None,
+    private_historical=None,
 ):
     """Only a verified existing draft may transition to published; never repair it.
 
@@ -279,6 +319,7 @@ def finalize_transfer(
         reconciliation_approval,
         final_approval,
         clock(),
+        private_historical=private_historical,
     )
     require(remote.repository == REPOSITORY, "transport destination mismatch")
     require(
@@ -303,7 +344,7 @@ def finalize_transfer(
         "final_approval_sha256": identity(final_approval),
         "registry_sha256": registry.index_sha256,
     }
-    if bundle["schema_version"] == 2:
+    if bundle["schema_version"] == 3:
         binding.update(
             schema_version=2,
             mode=MODE,
@@ -371,6 +412,7 @@ def finalize_transfer(
             reconciliation_approval,
             final_approval,
             clock(),
+            private_historical=private_historical,
         )
         pending = dict(
             binding, state="finalize-requested", ci=ci, tag_ref=fresh["tag_ref"]
@@ -384,6 +426,7 @@ def finalize_transfer(
                 reconciliation_approval=reconciliation_approval,
                 final_approval=final_approval,
                 intent_path=path,
+                private_historical=private_historical,
             )
         except (ValueError, OSError, subprocess.TimeoutExpired):
             # Read-only reconciliation even when the response was lost. Leave
@@ -635,6 +678,7 @@ class TransferGitHub:
         reconciliation_approval,
         final_approval,
         intent_path,
+        private_historical=None,
     ):
         require(self._execute, "read-only transfer transport cannot finalize")
         require(
@@ -653,6 +697,7 @@ class TransferGitHub:
             reconciliation_approval,
             final_approval,
             now,
+            private_historical=private_historical,
         )
         self.verify_execution_context(
             final_approval["ci_commits"]["distribution"], registry
@@ -669,7 +714,7 @@ class TransferGitHub:
             and intent.get("registry_sha256") == registry.index_sha256,
             "finalization needs the matching durable intent",
         )
-        if bundle["schema_version"] == 2:
+        if bundle["schema_version"] == 3:
             require(
                 intent.get("schema_version") == 2
                 and intent.get("mode") == MODE
@@ -693,6 +738,7 @@ class TransferGitHub:
             reconciliation_approval,
             final_approval,
             datetime.now(UTC),
+            private_historical=private_historical,
         )
         # Durable one-attempt guard also protects direct native calls and
         # concurrent callers. Never remove/reuse this marker after any outcome.
@@ -707,7 +753,7 @@ class TransferGitHub:
             "mode": bundle.get("mode", "strict-v1"),
             "attestation_sha256": identity(self.attestation),
         }
-        if bundle["schema_version"] == 2:
+        if bundle["schema_version"] == 3:
             attempt_record["uncertainty_acknowledgement_canonical_sha256"] = (
                 self.attestation["uncertainty_acknowledgement_canonical_sha256"]
             )
@@ -727,13 +773,22 @@ def main(argv=None):
     import argparse
     import json
 
-    parser = argparse.ArgumentParser(description=__doc__)
+    class PrivateArgumentParser(argparse.ArgumentParser):
+        def error(self, message):
+            raise ValueError("invalid transfer finalizer arguments")
+
+    parser = PrivateArgumentParser(description=__doc__)
     parser.add_argument("manifest", type=Path)
     parser.add_argument("--release-id", required=True, type=int)
     parser.add_argument("--original-approval", required=True, type=Path)
     parser.add_argument("--reconciliation-approval", required=True, type=Path)
     parser.add_argument("--final-approval", required=True, type=Path)
     parser.add_argument("--receipt", required=True, type=Path)
+    parser.add_argument(
+        "--private-historical",
+        type=Path,
+        help="Private authenticated v2 historical evidence; never part of public registry",
+    )
     parser.add_argument(
         "--execute",
         action="store_true",
@@ -752,7 +807,16 @@ def main(argv=None):
         )
     ]
     # Verify locally before constructing any transport or doing network reads.
-    verify_final_approval(bundle, registry, *approvals, datetime.now(UTC))
+    private_historical = (
+        load_json(args.private_historical) if args.private_historical else None
+    )
+    verify_final_approval(
+        bundle,
+        registry,
+        *approvals,
+        datetime.now(UTC),
+        private_historical=private_historical,
+    )
     result = finalize_transfer(
         manifest,
         args.release_id,
@@ -761,6 +825,7 @@ def main(argv=None):
         TransferGitHub(bundle["attestation"], execute=args.execute),
         args.receipt,
         execute=args.execute,
+        private_historical=private_historical,
     )
     print(json.dumps(result))
 
@@ -768,5 +833,7 @@ def main(argv=None):
 if __name__ == "__main__":
     try:
         main()
-    except (ValueError, OSError, TypeError, KeyError, subprocess.TimeoutExpired) as exc:
-        raise SystemExit(str(exc)) from exc
+    except (ValueError, OSError, TypeError, KeyError, subprocess.TimeoutExpired):
+        raise SystemExit(
+            "transfer finalization failed; private evidence and paths withheld"
+        ) from None

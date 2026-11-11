@@ -2,6 +2,8 @@
 
 import copy
 import json
+import subprocess
+import sys
 import tempfile
 import unittest
 from pathlib import Path
@@ -14,6 +16,7 @@ from reconcile_historical_transfer import MODE
 from reconcile_transfer import identity
 from refresh_catalog import build_catalog
 from test_reconcile_historical_transfer import (
+    historical_fixture,
     registry_fixture_v2,
     synthetic_approval_v2,
 )
@@ -24,9 +27,11 @@ from test_validate_site import empty_catalog
 from transfer_registry import TransferRegistry
 
 
-def approvals_v2(bundle, registry):
+def approvals_v2(bundle, registry, historical=None):
     _, _, final = approvals(bundle, registry)
-    rights = bundle["historical"]["rights_approval"]
+    rights = (historical if historical is not None else historical_fixture()[1])[
+        "rights_approval"
+    ]
     original = {
         k: rights[k]
         for k in (
@@ -58,6 +63,7 @@ class V2FinalizerTests(unittest.TestCase):
         self.addCleanup(self.temp.cleanup)
         self.root = Path(self.temp.name).resolve()
         self.bundle, _ = registry_fixture_v2(self.root)
+        self.historical = historical_fixture()[1]
         self.registry = TransferRegistry(self.root)
         self.approvals = approvals_v2(self.bundle, self.registry)
         self.remote = FakeRemote(self.bundle)
@@ -73,6 +79,7 @@ class V2FinalizerTests(unittest.TestCase):
             self.path,
             execute=execute,
             now=NOW,
+            private_historical=self.historical,
         )
 
     def test_absent_to_exact_tag_and_mode_bound_receipt(self):
@@ -104,7 +111,7 @@ class V2FinalizerTests(unittest.TestCase):
     def test_original_rights_substitution_rejected_even_if_final_hash_rebound(self):
         self.approvals[0]["owner"] = "another historical label"
         self.approvals[2]["original_approval_sha256"] = identity(self.approvals[0])
-        with self.assertRaisesRegex(ValueError, "historical provenance"):
+        with self.assertRaisesRegex(ValueError, "private transfer evidence"):
             self.run_finalizer()
 
     def test_missing_acknowledgement_and_cross_mode_receipt_rejected(self):
@@ -159,6 +166,64 @@ class V2FinalizerTests(unittest.TestCase):
             self.run_finalizer()
         self.assertEqual(self.remote.calls, 1)
 
+    def test_private_evidence_required_and_errors_do_not_echo_secrets(self):
+        sentinel = "PRIVATE_SENTINEL_/home/private/archive/Sentinel_owner_message"
+        for historical in (
+            None,
+            {sentinel: {"original_approval": sentinel}},
+            dict(self.historical, trusted_provenance={sentinel: sentinel}),
+        ):
+            self.historical = historical
+            with self.assertRaises(ValueError) as caught:
+                self.run_finalizer()
+            self.assertNotIn(sentinel, str(caught.exception))
+        self.assertEqual(self.remote.calls, 0)
+
+    def test_private_path_and_malformed_json_not_printed_by_cli(self):
+        secret = self.root / "PRIVATE_SENTINEL-owner-message.json"
+        for content in (None, "{PRIVATE_SENTINEL bad JSON"):
+            if content is not None:
+                secret.write_text(content)
+            command = [
+                sys.executable,
+                str(Path(f.__file__)),
+                str(secret),
+                "--release-id",
+                "17",
+                "--original-approval",
+                str(secret),
+                "--reconciliation-approval",
+                str(secret),
+                "--final-approval",
+                str(secret),
+                "--private-historical",
+                str(secret),
+                "--receipt",
+                str(self.path),
+            ]
+            result = subprocess.run(
+                command, text=True, capture_output=True, check=False
+            )
+            self.assertNotEqual(result.returncode, 0)
+            self.assertNotIn("PRIVATE_SENTINEL", result.stdout + result.stderr)
+            self.assertNotIn(str(self.root), result.stdout + result.stderr)
+            self.assertIn("paths withheld", result.stderr)
+
+    def test_cli_argument_errors_do_not_echo_private_values(self):
+        result = subprocess.run(
+            [
+                sys.executable,
+                str(Path(f.__file__)),
+                "--UNKNOWN-PRIVATE-SENTINEL=/home/private",
+            ],
+            text=True,
+            capture_output=True,
+            check=False,
+        )
+        self.assertNotEqual(result.returncode, 0)
+        self.assertNotIn("PRIVATE-SENTINEL", result.stdout + result.stderr)
+        self.assertNotIn("/home/private", result.stdout + result.stderr)
+
     def test_native_v2_boundary_requires_mode_bound_intent(self):
         remote = f.TransferGitHub(self.bundle["attestation"], execute=True)
         remote.verify_execution_context = Mock()
@@ -184,6 +249,7 @@ class V2FinalizerTests(unittest.TestCase):
             "reconciliation_approval": reconciliation,
             "final_approval": final,
             "intent_path": self.path,
+            "private_historical": self.historical,
         }
         with (
             patch.object(f, "RELEASE_STATE_ROOT", self.root / "native-state"),
@@ -191,6 +257,9 @@ class V2FinalizerTests(unittest.TestCase):
         ):
             clock.now.return_value = NOW
             self.path.write_bytes(canonical_bytes(pending))
+            with self.assertRaisesRegex(ValueError, "private transfer evidence"):
+                remote.finalize_existing(17, **dict(kwargs, private_historical=None))
+            remote._api.api.assert_not_called()
             with self.assertRaisesRegex(ValueError, "intent mode"):
                 remote.finalize_existing(17, **kwargs)
             remote._api.api.assert_not_called()
