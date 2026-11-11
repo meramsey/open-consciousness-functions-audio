@@ -131,15 +131,17 @@ full download verification before finalization. Missing server digests block
 deployment for reconciliation rather than silently weakening checks.
 
 Unmarked releases and drafts are not listed. Only releases authored by the
-repository owner are accepted by the initial automation; additional publishing
-principals need an explicit reviewed policy change. The workflow uploads and
+`meramsey` account are accepted. The destination is fixed to
+`ocfproject-org/open-consciousness-functions-audio`; organization ownership does
+not authorize the organization login or any other release author. Additional
+publishing principals need an explicit reviewed policy change. The workflow uploads and
 deploys the exact verified site artifact. It does not commit generated catalogs
 directly to main or rewrite historical releases.
 
 After approved publication, explicitly dispatch the existing Pages workflow:
 
 ```sh
-gh workflow run pages.yml --repo meramsey/open-consciousness-functions-audio --ref main -f release_tag=AUDIO_TAG
+gh workflow run pages.yml --repo ocfproject-org/open-consciousness-functions-audio --ref main -f release_tag=AUDIO_TAG
 ```
 
 This explicit handoff also works when the release was created with a workflow
@@ -193,3 +195,18 @@ do not claim that assets exist remotely. The packet is not an approval record:
 listening, content/artwork rights, voice redistribution and final publication
 remain owner decisions. No remote API is called. Preserve failed assembly
 directories for diagnosis. Keep the complete packet outside Git.
+
+## Organization transfer hold
+
+See [ORG_MIGRATION.md](ORG_MIGRATION.md). These destination changes are staged for
+transfer, not authorization to publish or modify the frozen draft. Existing
+approvals cannot authorize a manifest with a changed repository or tag.
+
+Read-only transferred-draft evidence validation is available via
+[`reconcile_transfer.py`](TRANSFER_PROTOCOL.md). Its separate approval authorizes
+reconciliation only; its result cannot resume or finalize publication.
+
+Transferred frozen drafts use the dedicated [transfer finalizer and registry](TRANSFER_PROTOCOL.md),
+not the ordinary upload/resume path. The committed registry is empty; neither
+transfer nor code integration authorizes a release. Final approval binds the
+organization destination, unchanged uploads, registry and exact green main commits.

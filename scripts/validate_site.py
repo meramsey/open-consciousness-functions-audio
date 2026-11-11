@@ -47,15 +47,16 @@ def require(condition, message):
         raise ValueError(message)
 
 
-def validate_catalog(catalog):
+def validate_catalog(catalog, *, registry=None):
     require(isinstance(catalog, dict), "catalog must be a JSON object")
     require(
         all(key in catalog for key in TOP_LEVEL),
         "catalog is missing required top-level fields",
     )
     require(
-        type(catalog["schema_version"]) is int and catalog["schema_version"] in (1, 2),
-        "unsupported schema_version (supported: 1, 2)",
+        type(catalog["schema_version"]) is int
+        and catalog["schema_version"] in (1, 2, 3),
+        "unsupported schema_version (supported: 1, 2, 3)",
     )
     for key in TOP_LEVEL[1:5]:
         require(
@@ -73,17 +74,22 @@ def validate_catalog(catalog):
         "published_at must be a string when present",
     )
     require(isinstance(catalog["releases"], list), "releases must be an array")
-    if catalog["schema_version"] == 2:
+    if catalog["schema_version"] in (2, 3):
         from publication import fields
 
         fields(catalog, TOP_LEVEL, ("published_at",))
     asset_ids = set()
     editions, tags = set(), set()
     for release in catalog["releases"]:
-        if catalog["schema_version"] == 2:
+        if catalog["schema_version"] in (2, 3):
             from catalog_contract import validate_release
 
-            validate_release(release)
+            if catalog["schema_version"] == 3 and "manifest_repository" in release:
+                from catalog_contract import validate_transferred_release
+
+                validate_transferred_release(release, registry=registry)
+            else:
+                validate_release(release)
             require(
                 release["version"] not in editions and release["tag"] not in tags,
                 "duplicate release edition or tag",
@@ -216,7 +222,7 @@ def validate_catalog(catalog):
                         "companion_files must be an array",
                     )
 
-    if catalog["schema_version"] == 2:
+    if catalog["schema_version"] in (2, 3):
         extras = [
             asset
             for release in catalog["releases"]

@@ -211,3 +211,60 @@ def validate_release(release):
         release["release_url"] == url and release["release_notes_url"] == url,
         "release URL mismatch",
     )
+    return manifest
+
+
+TRANSFER_FIELDS = (
+    "manifest_repository",
+    "download_repository",
+    "repository_id",
+    "release_id",
+    "migration_attestation_sha256",
+)
+
+
+def validate_transferred_release(release, *, registry=None):
+    from reconcile_transfer import LEGACY_REPOSITORY, REPOSITORY_ID, identity
+    from transfer_registry import load_registry
+
+    require(type(release) is dict, "expected release object")
+    require(
+        all(k in release for k in TRANSFER_FIELDS),
+        "incomplete transfer catalog identity",
+    )
+    require(
+        release["manifest_repository"] == LEGACY_REPOSITORY
+        and release["download_repository"] == REPOSITORY
+        and type(release["repository_id"]) is int
+        and release["repository_id"] == REPOSITORY_ID,
+        "unexpected transfer catalog destination",
+    )
+    registry = registry if registry is not None else load_registry()
+    bundle = registry.for_release(release["release_id"])
+    attestation = bundle["attestation"]
+    require(
+        release["migration_attestation_sha256"] == identity(attestation),
+        "catalog attestation is not pinned by registry",
+    )
+    require(
+        release["publication_manifest_sha256"] == identity(bundle["manifest"]),
+        "catalog original manifest digest mismatch",
+    )
+    extra = ("migration_mode", "migration_uncertainty_canonical_sha256")
+    if bundle["schema_version"] == 2:
+        require(
+            release.get("migration_mode") == bundle["mode"]
+            and release.get("migration_uncertainty_canonical_sha256")
+            == attestation["uncertainty_acknowledgement_canonical_sha256"],
+            "catalog transfer mode/uncertainty mismatch",
+        )
+    else:
+        require(
+            not any(k in release for k in extra), "v1 catalog cannot contain v2 mode"
+        )
+    ordinary = {k: v for k, v in release.items() if k not in (*TRANSFER_FIELDS, *extra)}
+    ordinary["publication_manifest_sha256"] = attestation["destination_manifest_sha256"]
+    reconstructed = validate_release(ordinary)
+    reconstructed["repository"] = LEGACY_REPOSITORY
+    registry.resolve(reconstructed, release["release_id"])
+    return reconstructed

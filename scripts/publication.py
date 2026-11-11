@@ -7,7 +7,9 @@ import re
 from pathlib import Path
 from urllib.parse import quote
 
-REPOSITORY = "meramsey/open-consciousness-functions-audio"
+REPOSITORY = "ocfproject-org/open-consciousness-functions-audio"
+# Human release authors are independent of the fixed organization destination.
+AUTHORIZED_PUBLISHERS = frozenset({"meramsey"})
 HEX = re.compile(r"[a-f0-9]{64}\Z")
 IDENTIFIER = re.compile(r"[A-Za-z0-9][A-Za-z0-9._+-]{0,127}\Z")
 FORMATS = {
@@ -324,6 +326,13 @@ def verify_files(manifest, root):
 
 def verify_approval(manifest, approval, *, publication=False):
     """An explicit owner record, not proof of identity or an automatic legal verdict."""
+    return _verify_approval_digest(
+        manifest_digest(manifest), approval, publication=publication
+    )
+
+
+def _verify_approval_digest(expected_digest, approval, *, publication=False):
+    """Validate a trusted record after the caller has validated its manifest schema."""
     fields(
         approval,
         (
@@ -342,7 +351,7 @@ def verify_approval(manifest, approval, *, publication=False):
         "unsupported approval schema",
     )
     require(
-        approval["manifest_sha256"] == manifest_digest(manifest),
+        approval["manifest_sha256"] == expected_digest,
         "approval does not bind this exact manifest",
     )
     text(approval["owner"])
@@ -373,6 +382,15 @@ def checksums(manifest):
 def control_artifacts(manifest):
     """Deterministic public metadata, with no local paths or approval identities."""
     validate_manifest(manifest)
+    return _control_artifacts(manifest)
+
+
+def _control_artifacts(manifest):
+    """Encode an already validated manifest; not an authorization boundary.
+
+    The transfer reconciler uses this for read-only legacy control verification.
+    All ordinary publication entry points retain strict destination validation.
+    """
     notes = [
         "# OCF audio edition " + manifest["edition"],
         "",

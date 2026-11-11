@@ -47,6 +47,11 @@ def release_entry(manifest, receipt, remote_release):
     )
     published = datetime.fromisoformat(remote_release["published_at"])
     require(published.tzinfo is not None, "publication timestamp needs timezone")
+    return _project_entry(manifest, identity, published)
+
+
+def _project_entry(manifest, identity, published):
+    """Project only after an ordinary or transferred evidence gate succeeded."""
     url = (
         "https://github.com/"
         + REPOSITORY
@@ -145,14 +150,16 @@ def release_entry(manifest, receipt, remote_release):
     return release
 
 
-def append_release(catalog, release):
-    validate_catalog(catalog)
+def append_release(catalog, release, *, registry=None):
+    validate_catalog(catalog, registry=registry)
     result = copy.deepcopy(catalog)
     require(
-        catalog["schema_version"] == 2 or not catalog["releases"],
+        catalog["schema_version"] in (2, 3) or not catalog["releases"],
         "legacy nonempty catalog requires explicit migration",
     )
-    result["schema_version"] = 2
+    result["schema_version"] = (
+        3 if catalog["schema_version"] == 3 or "manifest_repository" in release else 2
+    )
     existing = [
         r
         for r in result["releases"]
@@ -180,5 +187,83 @@ def append_release(catalog, release):
     require(not old_ids & new_ids, "asset IDs already belong to a historical release")
     result["releases"].append(release)
     result["releases"].sort(key=lambda r: (r["date"], r["version"]), reverse=True)
-    validate_catalog(result)
+    validate_catalog(result, registry=registry)
     return result
+
+
+def transferred_release_entry(
+    manifest, remote_release, remote_assets, *, registry=None, tag_ref=None
+):
+    """Project a published legacy manifest only through a pinned transfer bundle."""
+    from reconcile_transfer import LEGACY_REPOSITORY, PUBLISHER, REPOSITORY_ID, identity
+    from transfer_registry import load_registry
+
+    registry = registry if registry is not None else load_registry()
+    bundle = registry.resolve(manifest, remote_release["id"])
+    attestation = bundle["attestation"]
+    original = bundle["after"]["release"]
+    if bundle["schema_version"] == 2:
+        target = attestation["distribution_commit"]
+        require(
+            tag_ref
+            == {
+                "ref": "refs/tags/" + attestation["tag"],
+                "object_type": "commit",
+                "object_sha": target,
+                "peeled_commit": target,
+            },
+            "v2 catalog needs exact published tag",
+        )
+    require(
+        remote_release.get("draft") is False, "transferred release is not published"
+    )
+    require(
+        remote_release.get("author", {}).get("login") == PUBLISHER,
+        "transferred release publisher is not authorized",
+    )
+    for key in ("id", "tag_name", "target_commitish", "body", "upload_url"):
+        require(
+            remote_release.get(key) == original[key],
+            "transferred release identity mismatch: " + key,
+        )
+    expected = {a["name"]: a for a in attestation["assets"]}
+    require(
+        type(remote_assets) is list and len(remote_assets) == len(expected),
+        "transferred asset inventory mismatch",
+    )
+    seen = set()
+    for asset in remote_assets:
+        name = asset.get("name")
+        require(
+            type(name) is str and name in expected and name not in seen,
+            "unexpected or duplicate transferred asset",
+        )
+        seen.add(name)
+        pinned = expected[name]
+        require(
+            type(asset.get("id")) is int
+            and asset["id"] == pinned["remote_id"]
+            and type(asset.get("size")) is int
+            and asset["size"] == pinned["size_bytes"]
+            and asset.get("state") == "uploaded"
+            and asset.get("digest") == "sha256:" + pinned["sha256"],
+            "transferred asset ID, state, size or digest mismatch",
+        )
+    published = datetime.fromisoformat(remote_release["published_at"])
+    require(published.tzinfo is not None, "publication timestamp needs timezone")
+    release = _project_entry(manifest, identity(manifest), published)
+    release.update(
+        manifest_repository=LEGACY_REPOSITORY,
+        download_repository=REPOSITORY,
+        repository_id=REPOSITORY_ID,
+        release_id=remote_release["id"],
+        migration_attestation_sha256=identity(attestation),
+    )
+    if bundle["schema_version"] == 2:
+        release.update(
+            migration_mode=bundle["mode"],
+            migration_uncertainty_canonical_sha256=attestation[
+                "uncertainty_acknowledgement_canonical_sha256"
+            ],
+        )
+    return release

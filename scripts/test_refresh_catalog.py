@@ -2,7 +2,7 @@ import copy
 import hashlib
 import unittest
 
-from publication import canonical_bytes, control_artifacts
+from publication import REPOSITORY, canonical_bytes, control_artifacts
 from refresh_catalog import build_catalog
 from test_catalog import evidence
 from test_publication import fixture
@@ -43,7 +43,8 @@ class RefreshTests(unittest.TestCase):
             lambda _: canonical_bytes(self.manifest),
         )
 
-    def test_verified_owner_release_projects_without_audio_download(self):
+    def test_org_destination_with_human_publisher_projects_without_audio_download(self):
+        self.assertEqual(REPOSITORY, "ocfproject-org/open-consciousness-functions-audio")
         result, ignored = self.build()
         self.assertEqual(result["schema_version"], 2)
         self.assertEqual(len(result["releases"]), 1)
@@ -65,7 +66,12 @@ class RefreshTests(unittest.TestCase):
 
     def test_wrong_publisher_blocks_catalog(self):
         self.release["author"]["login"] = "other"
-        with self.assertRaisesRegex(ValueError, "owner"):
+        with self.assertRaisesRegex(ValueError, "not authorized"):
+            self.build()
+
+    def test_org_identity_is_not_a_publisher(self):
+        self.release["author"]["login"] = "ocfproject-org"
+        with self.assertRaisesRegex(ValueError, "not authorized"):
             self.build()
 
     def test_asset_omission_or_extra_is_rejected(self):

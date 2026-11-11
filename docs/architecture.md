@@ -1,6 +1,6 @@
 # Distribution architecture
 
-The main [OCF repository](https://github.com/meramsey/open-consciousness-functions) owns function definitions, narration/localization, rendering and DSP, voice adapters, validation, artwork generation, development documentation, and software releases. This sister repository owns the public audio library, release metadata, download catalog, announcements, checksums, companion-file specifications, collections, mirrors, and eventual publishing integration. It does not generate audio.
+The main [OCF repository](https://github.com/ocfproject-org/open-consciousness-functions) owns function definitions, narration/localization, rendering and DSP, voice adapters, validation, artwork generation, development documentation, and software releases. This sister repository owns the public audio library, release metadata, download catalog, announcements, checksums, companion-file specifications, collections, mirrors, and eventual publishing integration. It does not generate audio.
 
 The Git-tracked `site/` contains only static pages and small public metadata. Audio belongs in versioned GitHub Releases (or explicitly approved mirrors), never ordinary Git history or Git LFS by default. The website links to assets and must not copy large media into Pages. Releases retain historical URLs; updated audio receives a new immutable asset identity and release reference rather than silently replacing a published file.
 

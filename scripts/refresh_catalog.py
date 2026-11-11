@@ -11,11 +11,12 @@ import re
 import subprocess
 import tempfile
 from pathlib import Path
+from urllib.parse import quote
 
-from catalog import append_release, release_entry
+from catalog import append_release, release_entry, transferred_release_entry
 from github_publisher import GitHub
 from publication import (
-    REPOSITORY,
+    AUTHORIZED_PUBLISHERS,
     canonical_bytes,
     control_artifacts,
     manifest_digest,
@@ -25,7 +26,16 @@ from publication import (
 MARKER = re.compile(r"OCF publication manifest SHA-256: ([a-f0-9]{64})\Z")
 
 
-def build_catalog(base, releases, list_assets, read_manifest):
+def build_catalog(
+    base,
+    releases,
+    list_assets,
+    read_manifest,
+    *,
+    registry=None,
+    repository_id=None,
+    read_tag=None,
+):
     # Rebuild from immutable published manifests; never carry stale download URLs.
     result = dict(base, schema_version=2, releases=[])
     ignored = []
@@ -37,8 +47,8 @@ def build_catalog(base, releases, list_assets, read_manifest):
             ignored.append(release.get("tag_name"))
             continue
         require(
-            release.get("author", {}).get("login") == REPOSITORY.split("/")[0],
-            "release publisher is not the repository owner",
+            release.get("author", {}).get("login") in AUTHORIZED_PUBLISHERS,
+            "release publisher is not authorized",
         )
         assets = list_assets(release["id"])
         require(
@@ -54,6 +64,35 @@ def build_catalog(base, releases, list_assets, read_manifest):
         raw = read_manifest(named["publication.json"]["id"])
         require(len(raw) <= 8 * 1024 * 1024, "oversized publication manifest")
         manifest = json.loads(raw)
+        from reconcile_transfer import LEGACY_REPOSITORY, REPOSITORY_ID, identity
+
+        if manifest.get("repository") == LEGACY_REPOSITORY:
+            require(
+                type(repository_id) is int and repository_id == REPOSITORY_ID,
+                "current repository stable ID mismatch",
+            )
+            require(
+                hashlib.sha256(raw).hexdigest() == match[1] == identity(manifest),
+                "publication manifest differs from owner release marker",
+            )
+            from transfer_registry import load_registry
+
+            trusted = registry if registry is not None else load_registry()
+            bundle = trusted.resolve(manifest, release["id"])
+            tag_ref = None
+            if bundle["schema_version"] == 2:
+                require(callable(read_tag), "v2 catalog needs current tag lookup")
+                tag_ref = read_tag(release["tag_name"])
+            entry = transferred_release_entry(
+                manifest, release, assets, registry=trusted, tag_ref=tag_ref
+            )
+            if bundle["schema_version"] == 2:
+                require(
+                    read_tag(release["tag_name"]) == tag_ref,
+                    "v2 catalog tag changed during verification",
+                )
+            result = append_release(result, entry, registry=registry)
+            continue
         require(
             hashlib.sha256(raw).hexdigest() == match[1] == manifest_digest(manifest),
             "publication manifest differs from owner release marker",
@@ -88,10 +127,12 @@ def build_catalog(base, releases, list_assets, read_manifest):
             receipt["verified_assets"].append(
                 {"asset_id": asset_id, "sha256": checksum, "remote_id": remote["id"]}
             )
-        result = append_release(result, release_entry(manifest, receipt, release))
+        result = append_release(
+            result, release_entry(manifest, receipt, release), registry=registry
+        )
     from validate_site import validate_catalog
 
-    validate_catalog(result)
+    validate_catalog(result, registry=registry)
     return result, ignored
 
 
@@ -126,11 +167,34 @@ def main(argv=None):
             stream.seek(0)
             return stream.read(8 * 1024 * 1024 + 1)
 
+    def read_tag(tag):
+        refs = remote.api(
+            remote.base + "/git/matching-refs/tags/" + quote(tag, safe="")
+        )
+        refs = [r for r in refs if r["ref"] == "refs/tags/" + tag]
+        require(
+            len(refs) == 1 and refs[0]["object"]["type"] == "commit",
+            "v2 published tag missing or not lightweight",
+        )
+        sha = refs[0]["object"]["sha"]
+        require(
+            remote.api(remote.base + "/commits/" + sha)["sha"] == sha,
+            "published commit resolution mismatch",
+        )
+        return {
+            "ref": refs[0]["ref"],
+            "object_type": "commit",
+            "object_sha": sha,
+            "peeled_commit": sha,
+        }
+
     catalog, ignored = build_catalog(
         json.loads(args.base.read_text(encoding="utf-8")),
         [r for page in pages for r in page],
         remote.list_assets,
         read_manifest,
+        repository_id=remote.api(remote.base)["id"],
+        read_tag=read_tag,
     )
     with args.output.open("xb") as stream:
         stream.write(canonical_bytes(catalog))
