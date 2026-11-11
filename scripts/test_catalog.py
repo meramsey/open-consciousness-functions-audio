@@ -96,6 +96,28 @@ class CatalogProjectionTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "selectors"):
             validate_catalog(changed)
 
+    def test_filename_mapping_drift_breaks_manifest_binding(self):
+        from validate_site import validate_catalog
+
+        manifest = fixture()
+        release = release_entry(manifest, *evidence(manifest))
+        original = append_release(empty_catalog(), release)
+        for remote in (False, True):
+            with self.subTest(remote=remote):
+                changed = copy.deepcopy(original)
+                asset = changed["releases"][0]["functions"][0]["sessions"][0]["assets"][
+                    0
+                ]
+                if remote:
+                    asset["download_url"] = asset["download_url"].replace(
+                        asset["filename"], "Changed.flac"
+                    )
+                    asset["filename"] = "Changed.flac"
+                else:
+                    asset["display_filename"] = "Changed title.flac"
+                with self.assertRaisesRegex(ValueError, "approved manifest"):
+                    validate_catalog(changed)
+
     def test_same_identity_different_titles_rejected(self):
         manifest = fixture()
         second = copy.deepcopy(manifest["assets"][0])

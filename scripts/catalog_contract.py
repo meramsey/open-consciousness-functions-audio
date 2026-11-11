@@ -8,6 +8,7 @@ from publication import (
     asset_url,
     digest,
     fields,
+    manifest_digest,
     require,
     validate_manifest,
 )
@@ -28,6 +29,7 @@ def validate_release(release):
             "preparations",
             "publication_manifest_sha256",
             "tag",
+            "asset_order",
             "collections",
             "companions",
         ),
@@ -137,6 +139,10 @@ def validate_release(release):
             "invalid selector values",
         )
         languages, voices, session_ids = set(), set(), set()
+        require(
+            group["sessions"] and group["title"] == group["sessions"][0]["title"],
+            "group title differs from session",
+        )
         for session in group["sessions"]:
             fields(
                 session,
@@ -179,6 +185,22 @@ def validate_release(release):
     for asset in release["companions"]:
         add_asset(asset, companion=True)
     validate_manifest(manifest)
+    order = release["asset_order"]
+    require(
+        type(order) is list and all(type(x) is str for x in order),
+        "invalid asset order",
+    )
+    require(
+        len(order) == len(set(order)) == len(manifest["assets"])
+        and set(order) == {a["asset_id"] for a in manifest["assets"]},
+        "asset order mismatch",
+    )
+    positions = {asset_id: index for index, asset_id in enumerate(order)}
+    manifest["assets"].sort(key=lambda a: positions[a["asset_id"]])
+    require(
+        manifest_digest(manifest) == release["publication_manifest_sha256"],
+        "catalog projection differs from approved manifest",
+    )
     url = (
         "https://github.com/"
         + REPOSITORY

@@ -1,6 +1,7 @@
 """Optional deterministic ZIP parts of individual verified recordings (no re-encoding)."""
 
 import hashlib
+import re
 import tempfile
 import zipfile
 from pathlib import Path
@@ -11,6 +12,7 @@ from publication import (
     filename,
     manifest_digest,
     require,
+    validate_manifest,
     verify_files,
 )
 
@@ -141,7 +143,12 @@ def build_collections(manifest, root, destination, *, max_part_bytes=2_000_000_0
                     {
                         "asset_id": "collection-" + checksum[:32],
                         "filename": name,
-                        "remote_filename": name.replace(" - ", "-"),
+                        "remote_filename": re.sub(
+                            r"[^A-Za-z0-9._-]+", "-", name[:-4]
+                        ).strip(".-")[:170]
+                        + "-"
+                        + checksum[:12]
+                        + ".zip",
                         "format": "zip",
                         "size_bytes": path.stat().st_size,
                         "sha256": checksum,
@@ -153,6 +160,7 @@ def build_collections(manifest, root, destination, *, max_part_bytes=2_000_000_0
                         },
                     }
                 )
+        validate_manifest({**manifest, "assets": records})
         (stage / "collection-receipt.json").write_bytes(
             canonical_bytes(
                 {"schema_version": 1, "assets": records, "publication_approved": False}

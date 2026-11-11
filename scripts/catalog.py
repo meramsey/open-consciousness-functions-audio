@@ -64,6 +64,7 @@ def release_entry(manifest, receipt, remote_release):
         "preparations": [],
         "publication_manifest_sha256": identity,
         "tag": manifest["tag"],
+        "asset_order": [a["asset_id"] for a in manifest["assets"]],
         "collections": [],
         "companions": [],
     }

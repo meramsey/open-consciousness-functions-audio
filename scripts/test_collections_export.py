@@ -40,6 +40,30 @@ class CollectionsTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "already exists"):
                 build_collections(manifest, root, root / "first")
 
+    def test_remote_names_handle_plus_and_group_collisions(self):
+        from publication import validate_manifest
+
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory).resolve()
+            manifest = fixture()
+            base = manifest["assets"][0]
+            manifest["assets"] = []
+            for index, (locale, voice) in enumerate(
+                (("en-US", "voice"), ("en", "US-voice"), ("en-US", "voice+v1"))
+            ):
+                asset = copy.deepcopy(base)
+                asset.update(
+                    asset_id=f"track-{index}",
+                    filename=f"Track-{index}.flac",
+                    remote_filename=f"Track-{index}.flac",
+                )
+                asset["session"].update(locale=locale, voice_id=voice)
+                manifest["assets"].append(asset)
+                (root / asset["filename"]).write_bytes(b"fixture")
+            records = build_collections(manifest, root, root / "output")
+            self.assertEqual(len({a["remote_filename"] for a in records}), 3)
+            validate_manifest({**manifest, "assets": records})
+
     def test_tampered_input_rejected_before_staging(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory).resolve()

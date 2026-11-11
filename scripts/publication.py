@@ -196,6 +196,10 @@ def validate_manifest(manifest):
             )
         if "session" not in asset:
             continue
+        require(
+            asset["format"] in {"mp3", "flac"},
+            "session metadata belongs only to audio assets",
+        )
         session = asset["session"]
         fields(
             session,

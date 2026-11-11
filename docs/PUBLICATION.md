@@ -90,7 +90,8 @@ manifest permits at most 997 content assets, reserving the three metadata slots.
 parts grouped by voice, language and format. Each contains separate recordings,
 a relative M3U8 playlist and a member checksum manifest. Audio is stored without
 recompression. Byte hashes are checked during creation and archive read-back.
-The output directory must be new; failed staging is retained for diagnosis.
+GitHub transport names include a deterministic hash suffix to avoid collisions
+between language/voice groups. The output directory must be new; failed staging is retained for diagnosis.
 Collection assets need their own exact public approval before upload.
 
 Production catalog snapshots use schema version 2, validated by
@@ -98,7 +99,9 @@ Production catalog snapshots use schema version 2, validated by
 scaffold and historical data; a nonempty version-1 catalog requires an explicit
 migration. New releases are immutable, with separate `functions`, `preparations`
 `collections` and `companions` arrays. Selectors must match session languages/voices and
-all primary asset URLs must match the approved release tag.
+all primary asset URLs must match the approved release tag. Canonical asset order
+is retained so the validator can reconstruct the approved manifest and check its
+exact digest, including local-to-remote filename mappings.
 
 The site supports search, voice/language filters, per-function query links,
 HTML5 MP3 controls, individual downloads, checksums, edition listings, selection
