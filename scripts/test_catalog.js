@@ -1,5 +1,5 @@
 const assert = require('assert');
-const {safeURL, entries, filterEntries, downloadList} = require('../site/assets/js/app.js');
+const {safeURL, entries, filterEntries, downloadList, supportedCatalog} = require('../site/assets/js/app.js');
 assert.strictEqual(safeURL('javascript:alert(1)'), null);
 assert.strictEqual(safeURL('https://user:pass@example.com/file'), null);
 assert.strictEqual(safeURL('file:///private'), null);
@@ -13,4 +13,8 @@ assert.strictEqual(filterEntries(rows, '', 'fr-FR', '').length, 0);
 assert.strictEqual(filterEntries(rows, 'OCF-FND-001', '', '').length, 1);
 assert(downloadList([asset]).includes(asset.sha256));
 assert(downloadList([asset]).includes(asset.download_url));
-console.log('Catalog logic: 10 assertions passed');
+assert(supportedCatalog({schema_version: 3, releases: []}));
+assert(supportedCatalog({schema_version: 2, releases: []}));
+assert.strictEqual(supportedCatalog({schema_version: 4, releases: []}), false);
+assert.strictEqual(supportedCatalog({schema_version: 3, releases: {}}), false);
+console.log('Catalog logic: 14 assertions passed');

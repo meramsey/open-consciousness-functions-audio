@@ -1,7 +1,8 @@
 # Frozen-draft transfer reconciliation protocol
 
-Status: offline validation implemented; remote reuse/finalization and catalog
-activation remain disabled. Migration comes first, publication later. This tool
+Status: offline reconciliation, guarded finalization-only transport and trusted
+catalog integration are implemented. The committed registry is empty and no real
+final approval exists; real release execution remains disabled. Migration comes first, publication later. The offline reconciliation tool
 never calls GitHub, copies media, generates approval, edits an old packet/receipt,
 or accepts a new destination for ordinary publication. No real transfer evidence
 or approval has been created by the synthetic tests.
@@ -65,8 +66,9 @@ For this migration the supervisor must compare these values to that frozen recor
    supervisor prepares and routes this evidence; the owner is not asked to perform
    a manual technical continuation.
 
-Snapshot construction is an explicit projection of authenticated API/byte-read
-results, not implemented network collection. Do not feed the metadata-only
+Historical transfer snapshot construction is an explicit projection of authenticated
+API/byte-read results. The finalizer also implements fresh current-state network
+collection; it never fabricates historical before-transfer observations. Do not feed the metadata-only
 preparation inventory to the tool as full-download evidence. Offline consistency
 checks cannot establish remote freshness; repeat read-only checks if remote state
 may have changed. A proposed new observation changes its snapshot/attestation hash
@@ -145,53 +147,136 @@ approval and original manifest digests. This means the supplied approved evidenc
 is internally consistent, not that current GitHub state or approval authenticity
 has been independently established by the offline program.
 
-## Implementable later reuse/finalization design
+## Reviewed registry and catalog integration
 
-The implemented protocol resolves evidence and destination approval without
-changing media or draft bytes. It intentionally does not enable publication. A
-future mutation adapter and catalog integration need the following exact design
-review and activation after migration is confirmed; they are not implied by the
-new reconciliation result:
+`migration-attestations/index.json` is the trust anchor in the reviewed code
+checkout. It starts as `{ "schema_version": 1, "entries": [] }`. Each future entry
+has exactly `release_id`, `attestation_sha256` and `bundle_sha256`. A bundle named
+`<bundle_sha256>.json` has exactly `schema_version: 1`, `manifest`, `before`, `after`
+and `attestation`. Both digests hash canonical JSON, not formatting. The loader
+checks all fields, hashes, release IDs and the reconstructed attestation; unknown
+entries, renamed bundles, forged pins, symlinks and inconsistent evidence fail.
+No private approval is committed or embedded in that public bundle.
 
-1. Retain the original manifest/marker/control assets and draft ID. Store the
-   canonical attestation as a separate durable, reviewed record. Recommended public
-   location: an append-only `migration-attestations/<sha256>.json` in the distribution
-   repository, pinned by a reviewed commit/index. Selecting and approving that
-   public trust/retention mechanism is a consequential publication-policy decision;
-   no registry or real attestation is created here. Private approval stays private.
-2. Add a dedicated finalization-only adapter, not a bypass in ordinary publication.
-   Require the exact original rights approval plus a new authenticated approval
-   whose purpose is `publish-transferred-draft`, binding repository ID/name, release
-   ID/tag/target, original/virtual-destination manifest digests, attestation digest,
-   authorized human, rights flags and explicit publication permission. It must also
-   require the supervising owner-directed publication hold to have been lifted.
-3. Validate the approved reconciliation inputs with this module. Independently
-   read current repository ID, tag/commit and draft metadata, then stream-verify
-   every asset again and compare the immutable identity set with the attestation.
-   Fresh observation timestamps go into a new execution receipt; they do not
-   replace the approved historical snapshots. Any invariant drift stops execution
-   and requires a new reconciliation/approval, never automatic repair.
-4. Permit only the final `draft: false` transition on the exact existing release.
-   Forbid create, upload, delete, asset replacement, marker edits and tag movement
-   in this adapter. Recheck metadata and inventory immediately before mutation.
-   Reconcile uncertain responses by GET; never blindly retry. After confirmed
-   publication, re-read the same identity/inventory and persist a new, atomic
-   migration-specific receipt. Do not overwrite the original receipt.
-5. Ordinary catalog schema 2 cannot represent an old manifest digest reconstructed
-   with a new repository. Specify schema 3 fields `manifest_repository`,
-   `download_repository`, `repository_id`, `release_id` and
-   `migration_attestation_sha256`. Only the fixed legacy-to-org mapping and a pinned,
-   reviewed attestation may activate it. Validate the original manifest/control
-   hashes, unchanged asset IDs, authorized author, marker and published state;
-   project new destination URLs separately. Never trust a release's self-attached
-   attestation or loosen ordinary schema-2 validation. Preserve historical entries.
-6. Synthetic tests must cover every blocked mutation, old approval rejection,
-   forged registry/approval, wrong repo ID/author/tag/target, changed media or
-   controls, pagination omissions, published-state drift, concurrent mutation,
-   uncertain finalization, receipt replay and catalog digest/URL separation.
+Only reviewed repository commits may add an authenticated real evidence bundle
+and its index entry. Release assets and manifests cannot add themselves to this
+registry. The native finalizer requires this checkout's default registry, a clean
+working tree, and HEAD equal to its approved distribution CI commit. An arbitrary
+caller-supplied directory is accepted by offline test/library interfaces only;
+it cannot substitute for the native execution trust anchor.
 
-Until that separately reviewed publication policy and adapter/catalog work exist,
-transferred-draft reuse stays blocked even if offline reconciliation passes.
-There is no technical reason to reupload or delete the preserved draft merely to
-complete the repository migration. Transfer readiness, reconciled evidence and
-publication readiness are three separate states owned by the supervisor.
+Catalog schema 3 supports ordinary schema-2-shaped entries plus transferred
+entries with `manifest_repository`, `download_repository`, `repository_id`,
+`release_id` and `migration_attestation_sha256`. Validation reconstructs the
+original manifest and compares it to the pinned bundle while keeping new
+organization URLs separate from the original manifest digest. Ordinary schema-2
+validation is unchanged. Browser code recognizes schema 3's same display shape.
+
+Refresh requires the live distribution repository ID, an already-published release
+by `meramsey`, the unchanged marker/target/upload identity, all pinned remote asset
+IDs, exact names/sizes/states, and every original content/control digest. It then
+projects the original manifest with organization download URLs. Drafts remain
+excluded. A self-attached attestation never establishes catalog trust. This is
+GitHub API digest verification; full byte verification belongs to finalization.
+
+## Finalization-only adapter
+
+`scripts/transfer_finalizer.py` implements the dedicated adapter. Ordinary
+`github_publisher.py` still rejects legacy manifests. The new adapter cannot create
+releases, upload/delete/replace assets, edit markers or move existing tags. Its
+only native mutation shape is PATCH of the exact existing release with
+`draft: false` and `make_latest: false`.
+
+It requires THREE separately authenticated private records:
+
+1. The unchanged original approval, validated against the ORIGINAL manifest
+   digest and public asset/voice/artwork rights. Its old `publish` value supplies
+   no permission for the organization destination.
+2. The exact reconciliation approval defined above (`publish: false`).
+3. A new final approval defined below, granting this specific publication at the
+   organization destination and explicitly lifting the owner-directed release hold.
+
+All records come from the authenticated supervising approval channel. The tool
+never manufactures them or proves authenticity merely by parsing an `owner`
+string. Source-code access and a successful test/CI run do not grant approval.
+
+The final approval contains exactly:
+
+- `schema_version`: integer 1; `purpose`: `publish-transferred-draft`;
+  `owner`: `meramsey`.
+- `approved_at`, `expires_at`: timezone-aware timestamps after reconciliation;
+  approval must be currently valid and last no more than 24 hours.
+- `repository`: the fixed organization audio name; `repository_id`: 1437852834;
+  `release_id`, `tag`, `distribution_commit`: exact attested draft identity.
+- `original_manifest_sha256`, `destination_manifest_sha256`,
+  `attestation_sha256`, `bundle_sha256`, `registry_sha256`,
+  `original_approval_sha256`, `reconciliation_approval_sha256`: exact canonical
+  hashes binding the complete public evidence and private approval records.
+- `ci_commits`: exactly `source` and `distribution`, each a full commit SHA.
+  These are approved CODE main commits, separate from the frozen render/source
+  provenance and the existing release target. No old provenance/target is changed.
+- `allow_tag_creation`: Boolean true only if the attested tag ref was absent.
+  Finalization can create that missing lightweight tag at the frozen target;
+  a pre-existing tag must retain its exact ref/object identity.
+- `public_assets`, `voice_redistribution`, `artwork_redistribution`,
+  `release_hold_lifted`, `publish`: all explicitly Boolean true.
+
+The native transport checks the current IDs and main SHAs of both repositories.
+It requires successful completed push-to-main runs at those exact SHAs for source
+`test.yml`, `lint.yml`, `validate.yml`, `generated-index-check.yml`, and audio
+`validate.yml`. Missing, pending, failed, wrong-event, wrong-path or wrong-commit
+runs fail closed. All matching run pages are checked within a bounded inventory; active attempts
+block execution, and latest update time selects reruns even when their original
+run ID is older. A newer failed attempt cannot be replaced by an older success.
+The running clean code HEAD must equal the approved audio CI SHA. No caller's
+self-reported `ci_passed` flag is accepted.
+
+Before mutation, the adapter verifies downloaded bytes for every asset, including
+all original controls, between consistent full metadata observations. It repeats
+current identity/inventory and CI/main checks at the mutation boundary. Byte hashes
+may be cached only within that transport instance and only while every ID/name/
+size/state/API digest stays unchanged. Cache reuse is not a new byte download.
+A changed inventory invalidates the cache and blocks mutation.
+
+Use fresh receipt paths outside the code checkout, separate from the frozen
+packet's receipt. Defaults perform verification only; the extra `--execute` flag
+is necessary but not sufficient for publication:
+
+```sh
+python scripts/transfer_finalizer.py ORIGINAL_MANIFEST --release-id RELEASE_ID \
+  --original-approval ORIGINAL_APPROVAL --reconciliation-approval NEW_RECONCILIATION_APPROVAL \
+  --final-approval NEW_FINAL_APPROVAL --receipt NEW_TRANSFER_RECEIPT
+```
+
+Do not add `--execute` until the exact final owner decision exists, the hold is
+lifted, the registry is reviewed/merged and exact-main CI has passed. Both the
+orchestrator and the native PATCH method validate those gates. No actual approval
+record is supplied or generated by this implementation or its synthetic tests.
+
+The supervisor must serialize this release across hosts and use one canonical
+new receipt path. An exclusive local lock blocks duplicate local owners; unknown
+stale locks require reconciliation, not deletion by the tool. A durable
+`finalize-requested` intent is fsynced before PATCH. The native boundary also
+exclusively creates and fsyncs a permanent `.attempt` marker and records
+`mutation-attempted` before PATCH. Neither direct calls nor a restored stale intent
+can reuse that attempt marker. Never delete it to force a retry. A lost response is reconciled
+read-only. If the draft still appears unpublished or readback fails, the intent
+stays pending; rerunning cannot issue a second PATCH. A replay may only verify
+that the matching pending operation is already published with unchanged assets.
+An already-published release without matching intent cannot be silently adopted.
+Expired approvals or changed main/CI also stop execution; the supervisor must
+reconcile such cases explicitly, without inventing approval or replacing intent.
+
+After finalization, the same inventory, marker, target, publisher and expected
+tag ref are checked again before a new `published-verified` transfer receipt is
+written. It is a separate receipt schema; it never overwrites the original record
+or substitutes for an ordinary publisher receipt.
+
+## Remaining live gates
+
+Migration engineering authorization permits reviewed PRs and CI, not publication.
+The registry deliberately contains no real entries. The supervisor must prepare
+authenticated real before/after full-byte evidence, route its exact new approval,
+and review/merge its public registry entry. Then it must prepare the final approval
+against exact green main SHAs and keep the release held until the owner grants
+that decision. No media reupload or old control rewrite is needed for this path.

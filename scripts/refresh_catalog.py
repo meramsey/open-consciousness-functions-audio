@@ -12,7 +12,7 @@ import subprocess
 import tempfile
 from pathlib import Path
 
-from catalog import append_release, release_entry
+from catalog import append_release, release_entry, transferred_release_entry
 from github_publisher import GitHub
 from publication import (
     AUTHORIZED_PUBLISHERS,
@@ -25,7 +25,9 @@ from publication import (
 MARKER = re.compile(r"OCF publication manifest SHA-256: ([a-f0-9]{64})\Z")
 
 
-def build_catalog(base, releases, list_assets, read_manifest):
+def build_catalog(
+    base, releases, list_assets, read_manifest, *, registry=None, repository_id=None
+):
     # Rebuild from immutable published manifests; never carry stale download URLs.
     result = dict(base, schema_version=2, releases=[])
     ignored = []
@@ -54,6 +56,22 @@ def build_catalog(base, releases, list_assets, read_manifest):
         raw = read_manifest(named["publication.json"]["id"])
         require(len(raw) <= 8 * 1024 * 1024, "oversized publication manifest")
         manifest = json.loads(raw)
+        from reconcile_transfer import LEGACY_REPOSITORY, REPOSITORY_ID, identity
+
+        if manifest.get("repository") == LEGACY_REPOSITORY:
+            require(
+                type(repository_id) is int and repository_id == REPOSITORY_ID,
+                "current repository stable ID mismatch",
+            )
+            require(
+                hashlib.sha256(raw).hexdigest() == match[1] == identity(manifest),
+                "publication manifest differs from owner release marker",
+            )
+            entry = transferred_release_entry(
+                manifest, release, assets, registry=registry
+            )
+            result = append_release(result, entry, registry=registry)
+            continue
         require(
             hashlib.sha256(raw).hexdigest() == match[1] == manifest_digest(manifest),
             "publication manifest differs from owner release marker",
@@ -88,10 +106,12 @@ def build_catalog(base, releases, list_assets, read_manifest):
             receipt["verified_assets"].append(
                 {"asset_id": asset_id, "sha256": checksum, "remote_id": remote["id"]}
             )
-        result = append_release(result, release_entry(manifest, receipt, release))
+        result = append_release(
+            result, release_entry(manifest, receipt, release), registry=registry
+        )
     from validate_site import validate_catalog
 
-    validate_catalog(result)
+    validate_catalog(result, registry=registry)
     return result, ignored
 
 
@@ -131,6 +151,7 @@ def main(argv=None):
         [r for page in pages for r in page],
         remote.list_assets,
         read_manifest,
+        repository_id=remote.api(remote.base)["id"],
     )
     with args.output.open("xb") as stream:
         stream.write(canonical_bytes(catalog))

@@ -326,6 +326,13 @@ def verify_files(manifest, root):
 
 def verify_approval(manifest, approval, *, publication=False):
     """An explicit owner record, not proof of identity or an automatic legal verdict."""
+    return _verify_approval_digest(
+        manifest_digest(manifest), approval, publication=publication
+    )
+
+
+def _verify_approval_digest(expected_digest, approval, *, publication=False):
+    """Validate a trusted record after the caller has validated its manifest schema."""
     fields(
         approval,
         (
@@ -344,7 +351,7 @@ def verify_approval(manifest, approval, *, publication=False):
         "unsupported approval schema",
     )
     require(
-        approval["manifest_sha256"] == manifest_digest(manifest),
+        approval["manifest_sha256"] == expected_digest,
         "approval does not bind this exact manifest",
     )
     text(approval["owner"])

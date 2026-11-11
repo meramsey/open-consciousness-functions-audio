@@ -83,10 +83,12 @@ class CatalogValidationTests(unittest.TestCase):
                 validate_site.validate_site()
 
     def test_unsupported_schema_is_rejected(self):
-        data = empty_catalog()
-        data["schema_version"] = 3
-        with self.assertRaisesRegex(ValueError, "unsupported schema_version"):
-            validate_site.validate_catalog(data)
+        for version in (4, 0, True, 3.0, "3", None):
+            with self.subTest(version=version):
+                data = empty_catalog()
+                data["schema_version"] = version
+                with self.assertRaisesRegex(ValueError, "unsupported schema_version"):
+                    validate_site.validate_catalog(data)
 
     def test_duplicate_asset_ids_are_rejected(self):
         with self.assertRaisesRegex(ValueError, "duplicate asset identifier"):

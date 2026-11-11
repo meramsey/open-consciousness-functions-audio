@@ -18,7 +18,8 @@
     `${item.id} ${item.title} ${item.description}`.toLocaleLowerCase().includes(query.toLocaleLowerCase()) &&
     (!locale || item.locale === locale) && (!voice || item.voiceId === voice));
   const downloadList = assets => assets.map(a => `${a.sha256}  ${a.filename}\n${a.download_url}`).join('\n\n') + '\n';
-  if (typeof module !== 'undefined') module.exports = {safeURL, entries, filterEntries, downloadList};
+  const supportedCatalog = catalog => [1, 2, 3].includes(catalog.schema_version) && Array.isArray(catalog.releases);
+  if (typeof module !== 'undefined') module.exports = {safeURL, entries, filterEntries, downloadList, supportedCatalog};
   if (typeof document === 'undefined') return;
   const el = (tag, text, className) => {
     const node = document.createElement(tag);
@@ -82,7 +83,7 @@
   fetch('catalog.json').then(response => {
     if (!response.ok) throw new Error('Catalog unavailable'); return response.json();
   }).then(catalog => {
-    if (![1, 2].includes(catalog.schema_version) || !Array.isArray(catalog.releases)) throw new Error('Unsupported catalog');
+    if (!supportedCatalog(catalog)) throw new Error('Unsupported catalog');
     const items = entries(catalog);
     const extras = document.getElementById('release-extras');
     catalog.releases.forEach(release => {

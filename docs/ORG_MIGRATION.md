@@ -121,8 +121,9 @@ authorized new draft/tag and uploads, leaving the frozen draft intact. For reuse
 [transfer reconciliation protocol](TRANSFER_PROTOCOL.md). It validates complete
 before/after evidence and a new exact approval, producing only a publication-held
 result. It does not make the ordinary publisher accept a legacy manifest. The
-dedicated finalizer and trusted catalog-attestation integration are specified as
-later publication work; they remain disabled. Transfer alone grants neither path
+dedicated finalizer and trusted catalog-attestation integration are implemented
+with an empty registry and strict approval/CI gates; real publication remains
+disabled until those gates are satisfied. Transfer alone grants neither path
 authorization, and migration does not require reuploading the preserved draft.
 
 ## ocfproject.org / Cloudflare cutover
