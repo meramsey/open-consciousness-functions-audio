@@ -3,13 +3,31 @@
 import copy
 from pathlib import Path
 
-from publication import canonical_bytes, digest, fields, require
+from publication import canonical_bytes, digest, require
+from publication import fields as _fields
 from reconcile_transfer import build_attestation, identity, load_json, positive_id
+
+
+def fields(*args, **kwargs):
+    try:
+        return _fields(*args, **kwargs)
+    except (ValueError, TypeError):
+        raise ValueError("invalid transfer registry schema") from None
+
+
+def _load_json(path):
+    try:
+        return load_json(path)
+    except (ValueError, TypeError, OSError) as exc:
+        if str(exc) == "symlink in input path":
+            raise ValueError("symlink in registry path") from None
+        raise ValueError("invalid transfer registry JSON") from None
+
 
 DEFAULT_ROOT = Path(__file__).resolve().parents[1] / "migration-attestations"
 
 
-def validate_bundle(bundle):
+def _validate_bundle(bundle):
     require(type(bundle) is dict, "expected transfer bundle object")
     version = bundle.get("schema_version")
     require(type(version) is int, "unsupported transfer bundle schema")
@@ -18,24 +36,10 @@ def validate_bundle(bundle):
         expected = build_attestation(
             bundle["manifest"], bundle["before"], bundle["after"]
         )
-    elif version == 2:
-        from reconcile_historical_transfer import MODE, build_attestation_v2
+    elif version == 3:
+        from public_transfer_evidence import validate_public_bundle
 
-        fields(
-            bundle,
-            (
-                "schema_version",
-                "mode",
-                "manifest",
-                "historical",
-                "after",
-                "attestation",
-            ),
-        )
-        require(bundle["mode"] == MODE, "unexpected registry bundle mode")
-        expected = build_attestation_v2(
-            bundle["manifest"], bundle["historical"], bundle["after"]
-        )
+        return validate_public_bundle(bundle)
     else:
         raise ValueError("unsupported transfer bundle schema")
     require(
@@ -45,12 +49,19 @@ def validate_bundle(bundle):
     return expected
 
 
+def validate_bundle(bundle):
+    try:
+        return _validate_bundle(bundle)
+    except (ValueError, TypeError, KeyError, AttributeError):
+        raise ValueError("invalid transfer registry bundle") from None
+
+
 class TransferRegistry:
     """Trust anchor is this reviewed checkout's index, not supplied public metadata."""
 
     def __init__(self, path=DEFAULT_ROOT):
         self.root = Path(path)
-        index = load_json(self.root / "index.json")
+        index = _load_json(self.root / "index.json")
         self.root = self.root.resolve()
         fields(index, ("schema_version", "entries"))
         require(
@@ -62,26 +73,41 @@ class TransferRegistry:
         self._bundles = {}
         for entry in index["entries"]:
             fields(
-                entry, ("release_id", "attestation_sha256", "bundle_sha256"), ("mode",)
+                entry,
+                ("release_id", "attestation_sha256", "bundle_sha256"),
+                ("mode", "bundle_schema_version", "evidence_visibility"),
             )
             if "mode" in entry:
+                from public_transfer_evidence import VISIBILITY
                 from reconcile_historical_transfer import MODE
 
-                require(entry["mode"] == MODE, "unexpected registry entry mode")
+                require(
+                    entry["mode"] == MODE
+                    and type(entry.get("bundle_schema_version")) is int
+                    and entry["bundle_schema_version"] == 3
+                    and entry.get("evidence_visibility") == VISIBILITY,
+                    "unexpected registry entry mode or visibility",
+                )
+            else:
+                require(
+                    "bundle_schema_version" not in entry
+                    and "evidence_visibility" not in entry,
+                    "unexpected v1 registry entry fields",
+                )
             positive_id(entry["release_id"])
             digest(entry["attestation_sha256"])
             digest(entry["bundle_sha256"])
             require(
                 entry["release_id"] not in self._bundles, "duplicate registry release"
             )
-            bundle = load_json(self.root / (entry["bundle_sha256"] + ".json"))
+            bundle = _load_json(self.root / (entry["bundle_sha256"] + ".json"))
             require(
                 identity(bundle) == entry["bundle_sha256"],
                 "registry bundle digest mismatch",
             )
             require(
                 (
-                    bundle.get("schema_version") == 2
+                    bundle.get("schema_version") == 3
                     and entry.get("mode") == bundle.get("mode")
                 )
                 or (bundle.get("schema_version") == 1 and "mode" not in entry),

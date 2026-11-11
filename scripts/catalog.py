@@ -202,7 +202,7 @@ def transferred_release_entry(
     bundle = registry.resolve(manifest, remote_release["id"])
     attestation = bundle["attestation"]
     original = bundle["after"]["release"]
-    if bundle["schema_version"] == 2:
+    if bundle["schema_version"] == 3:
         target = attestation["distribution_commit"]
         require(
             tag_ref
@@ -259,7 +259,7 @@ def transferred_release_entry(
         release_id=remote_release["id"],
         migration_attestation_sha256=identity(attestation),
     )
-    if bundle["schema_version"] == 2:
+    if bundle["schema_version"] == 3:
         release.update(
             migration_mode=bundle["mode"],
             migration_uncertainty_canonical_sha256=attestation[

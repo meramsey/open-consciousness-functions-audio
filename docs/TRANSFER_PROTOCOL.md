@@ -319,3 +319,41 @@ compare-and-swap through release PATCH; unresolved competing writers block relea
 The owner must see the concrete historical uncertainty in the eventual approval
 request. Migration engineering authorization does not accept that uncertainty on
 the owner's behalf or grant publication permission.
+
+## Public registry commitments and private finalization inputs
+
+Historical-receipt reconciliation remains mode v2, but its **public envelope is
+schema 3**. The complete schema-2 bundle is private evidence and is rejected by
+the public registry. A schema number must never implicitly select a different
+approval mode. Strict v1 remains unchanged and contains only its public manifest,
+public release snapshots and attestation, with no owner approval embedded.
+
+`public_transfer_evidence.build_public_bundle(private_bundle)` validates the private
+bundle, preserves its exact attestation, and derives a closed public envelope with
+`evidence_visibility: public-commitments`. It contains only the original public
+manifest, destination snapshot, attestation and commitments to historical evidence,
+original rights approval, archive provenance and the fixed-role archive-hash inventory.
+No original approval content, historical object, message IDs or local archive paths
+belong in the public envelope, registry, PR body or logs. Existing public manifest
+content is preserved, not silently redacted or rewritten.
+
+A public commitment proves consistency with reviewed bytes, not authenticity of
+archived evidence or owner identity. An authorized independent reviewer must privately
+rebuild and compare the exact projection before a public index can pin its bundle,
+attestation, release ID, mode, envelope schema and visibility. This repository's
+index remains empty until separate exact reconciliation authorization.
+
+The finalizer requires `--private-historical` for schema-3/v2 records, alongside the
+separate original rights, reconciliation and final approvals. It rederives the exact
+attestation and all historical commitments at both high-level and native mutation
+boundaries. Public registry data alone cannot satisfy this private-evidence gate.
+The catalog validates only the public envelope and never loads private records.
+Validation failures involving private evidence suppress input fields, contents and
+paths rather than echoing them into errors. Full private evidence stays in owner-only
+local storage and must not be submitted to public CI for real releases.
+
+Freeze and independently inspect the proposed public envelope and index hashes before
+routing the owner decision. Reconciliation authorizes only the exact transfer binding
+and acknowledged historical uncertainty; it does not publish. Later final approval
+binds that public bundle/index and successful current-main commits. If any binding
+changes, obtain new scoped approval rather than reusing an earlier decision.

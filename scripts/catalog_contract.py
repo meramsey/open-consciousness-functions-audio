@@ -251,7 +251,7 @@ def validate_transferred_release(release, *, registry=None):
         "catalog original manifest digest mismatch",
     )
     extra = ("migration_mode", "migration_uncertainty_canonical_sha256")
-    if bundle["schema_version"] == 2:
+    if bundle["schema_version"] == 3:
         require(
             release.get("migration_mode") == bundle["mode"]
             and release.get("migration_uncertainty_canonical_sha256")

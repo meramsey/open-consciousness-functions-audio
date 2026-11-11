@@ -135,11 +135,16 @@ def registry_fixture_v2(root):
         "after": after,
         "attestation": attestation,
     }
+    from public_transfer_evidence import build_public_bundle
+
+    bundle = build_public_bundle(bundle)
     index = {
         "schema_version": 1,
         "entries": [
             {
                 "mode": MODE,
+                "bundle_schema_version": 3,
+                "evidence_visibility": "public-commitments",
                 "release_id": 17,
                 "attestation_sha256": identity(attestation),
                 "bundle_sha256": identity(bundle),

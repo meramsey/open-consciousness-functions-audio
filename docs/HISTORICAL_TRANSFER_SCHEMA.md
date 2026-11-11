@@ -142,3 +142,12 @@ exact approved target and CI, explicit final permission and uncertainty binding,
 and the release-wide single-attempt guard. After publication the tag must be the
 exact approved commit; an existing post-publication tag cannot be replayed as
 pre-publication absence. Competing writers and ambiguous outcomes remain blockers.
+
+## Visibility boundary
+
+The schema-2 historical bundle described here is **private-only**. It is not a
+public registry artifact. Keep original owner labels, approval values, message IDs
+and archive paths unchanged in private evidence. Derive the separate schema-3
+`public-commitments` envelope using `public_transfer_evidence.build_public_bundle`;
+its attestation remains byte-identical. See [TRANSFER_PROTOCOL.md](TRANSFER_PROTOCOL.md)
+for public pinning and separately supplied private finalizer evidence.
