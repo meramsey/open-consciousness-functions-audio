@@ -18,7 +18,8 @@ def release_entry(manifest, receipt, remote_release):
     identity = manifest_digest(manifest)
     require(
         receipt.get("manifest_sha256") == identity
-        and receipt.get("phase") == "published-verified",
+        and receipt.get("phase")
+        in {"published-verified", "published-api-digest-verified"},
         "catalog requires a published verification receipt",
     )
     require(

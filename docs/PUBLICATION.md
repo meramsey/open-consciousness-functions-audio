@@ -20,7 +20,12 @@ Each asset has `asset_id`, a safe flat local `filename`, an explicit ASCII
 `remote_filename` for GitHub, `format`, `size_bytes`, `sha256`
 and `provenance`. Provenance contains `source_manifest_sha256` and
 `technical_receipt_sha256`; audio additionally requires `master_sha256`.
-Non-audio files do not invent an audio master hash. Unknown fields are rejected.
+Non-audio files do not invent an audio master hash. Optional `export_commit`
+records the later packaging implementation separately. Optional `render_source`
+records `state` (`committed` or `frozen-working-tree`), `base_commit`,
+`snapshot_sha256`, `snapshot_scope: public-repository-files`, and an optional
+`audio_code_equivalent_commit`. A later equivalent commit is not misrepresented
+as the HEAD used during rendering. Unknown fields are rejected.
 
 Audio has a `session` object: `kind`, nullable `function_id`, `title`, `locale`,
 `voice_id`, `voice_name`, `edition`, measured `duration_seconds`, `sample_rate_hz`,
@@ -109,3 +114,37 @@ download lists and MP3 playlists. It does not claim to build ZIPs in the browser
 A published collection must exist before it can be offered for download.
 Browser/display/playback verification and cross-repository publication automation
 remain release gates; passing the JavaScript logic tests is not that evidence.
+
+## Catalog deployment
+
+The Pages workflow rebuilds the catalog from owner-published release manifests.
+It verifies the canonical manifest digest against the release marker and every
+asset's stored GitHub SHA-256, size and uploaded state. This is explicitly API
+digest verification, not another full audio download; the publisher performs
+full download verification before finalization. Missing server digests block
+deployment for reconciliation rather than silently weakening checks.
+
+Unmarked releases and drafts are not listed. Only releases authored by the
+repository owner are accepted by the initial automation; additional publishing
+principals need an explicit reviewed policy change. The workflow uploads and
+deploys the exact verified site artifact. It does not commit generated catalogs
+directly to main or rewrite historical releases.
+
+After approved publication, explicitly dispatch the existing Pages workflow:
+
+```sh
+gh workflow run pages.yml --repo meramsey/open-consciousness-functions-audio --ref main -f release_tag=AUDIO_TAG
+```
+
+This explicit handoff also works when the release was created with a workflow
+token whose ordinary events do not start another workflow. Reconcile an
+uncertain dispatch response against Actions runs before retrying. Confirm the
+exact run and deployed catalog before reporting a release as available.
+
+A read-only local check is available with:
+
+```sh
+python scripts/refresh_catalog.py --output /path/to/new-catalog.json
+```
+
+This never uploads audio, edits a release, or deploys Pages.

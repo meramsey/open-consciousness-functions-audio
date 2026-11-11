@@ -86,6 +86,22 @@ class PublicationTests(unittest.TestCase):
                     with self.assertRaises(ValueError):
                         p.verify_approval(manifest, record)
 
+    def test_frozen_render_source_is_distinct_from_export_commit(self):
+        manifest = fixture()
+        provenance = manifest["assets"][0]["provenance"]
+        provenance["export_commit"] = "c" * 40
+        provenance["render_source"] = {
+            "state": "frozen-working-tree",
+            "base_commit": "a" * 40,
+            "snapshot_sha256": "d" * 64,
+            "snapshot_scope": "public-repository-files",
+            "audio_code_equivalent_commit": "e" * 40,
+        }
+        p.validate_manifest(manifest)
+        provenance["render_source"]["base_commit"] = "f" * 40
+        with self.assertRaisesRegex(ValueError, "render base"):
+            p.validate_manifest(manifest)
+
     def test_preparation_is_not_fake_function(self):
         manifest = fixture()
         session = manifest["assets"][0]["session"]

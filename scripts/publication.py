@@ -23,6 +23,8 @@ FORMATS = {
     "srt",
     "zip",
     "m3u8",
+    "json",
+    "lrc",
 }
 
 
@@ -185,10 +187,49 @@ def validate_manifest(manifest):
         fields(
             provenance,
             ("source_manifest_sha256", "technical_receipt_sha256"),
-            ("master_sha256",),
+            ("master_sha256", "render_source", "export_commit"),
         )
-        for value in provenance.values():
-            digest(value)
+        for key in (
+            "source_manifest_sha256",
+            "technical_receipt_sha256",
+            "master_sha256",
+        ):
+            if key in provenance:
+                digest(provenance[key])
+        if "export_commit" in provenance:
+            require(
+                type(provenance["export_commit"]) is str
+                and re.fullmatch(r"[a-f0-9]{40}", provenance["export_commit"]),
+                "invalid export commit",
+            )
+        if "render_source" in provenance:
+            render = provenance["render_source"]
+            fields(
+                render,
+                ("state", "base_commit", "snapshot_sha256", "snapshot_scope"),
+                ("audio_code_equivalent_commit",),
+            )
+            require(
+                render["state"] in {"committed", "frozen-working-tree"},
+                "invalid render source state",
+            )
+            require(
+                render["snapshot_scope"] == "public-repository-files",
+                "invalid source snapshot scope",
+            )
+            require(
+                render["base_commit"] == manifest["source_commit"],
+                "render base differs from source commit",
+            )
+            digest(render["snapshot_sha256"])
+            if "audio_code_equivalent_commit" in render:
+                require(
+                    type(render["audio_code_equivalent_commit"]) is str
+                    and re.fullmatch(
+                        r"[a-f0-9]{40}", render["audio_code_equivalent_commit"]
+                    ),
+                    "invalid equivalent commit",
+                )
         if asset["format"] in {"mp3", "flac"}:
             require("session" in asset, "audio needs session metadata")
             require(

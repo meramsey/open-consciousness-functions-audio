@@ -26,7 +26,7 @@ class GitHub:
 
     def __init__(self, target_commit):
         require(
-            re.fullmatch(r"[a-f0-9]{40}", target_commit),
+            target_commit is None or re.fullmatch(r"[a-f0-9]{40}", target_commit),
             "distribution target must be a full commit SHA",
         )
         self.target_commit = target_commit
@@ -43,7 +43,7 @@ class GitHub:
             "Accept: application/vnd.github+json",
         ]
         if paginate:
-            command += ["--paginate", "--slurp"]
+            command += ["--paginate"]
         if body is not None:
             command += ["--input", "-"]
         result = subprocess.run(
@@ -58,6 +58,18 @@ class GitHub:
             result.returncode == 0,
             "GitHub API request failed: " + result.stderr.strip(),
         )
+        if paginate:
+            pages = []
+            remaining = result.stdout.lstrip()
+            decoder = json.JSONDecoder()
+            while remaining:
+                page, end = decoder.raw_decode(remaining)
+                require(
+                    type(page) is list, "paginated API response must contain arrays"
+                )
+                pages.append(page)
+                remaining = remaining[end:].lstrip()
+            return pages
         return json.loads(result.stdout)
 
     def find_release(self, tag):
@@ -69,6 +81,10 @@ class GitHub:
         return matches[0] if matches else None
 
     def create_draft(self, tag, marker):
+        require(
+            self.target_commit is not None,
+            "read-only transport cannot create a release",
+        )
         commit = self.api(self.base + "/commits/" + self.target_commit)
         require(commit["sha"] == self.target_commit, "distribution commit not found")
         # Existing tags must resolve to the intended commit; do not move tags.

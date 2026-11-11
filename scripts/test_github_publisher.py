@@ -41,6 +41,25 @@ class GitHubTests(unittest.TestCase):
         ):
             transport.find_release("audio-v1")
 
+    def test_pagination_supports_existing_cli_without_slurp(self):
+        transport = gh.GitHub(None)
+        outcome = SimpleNamespace(returncode=0, stderr="", stdout='[]\n[{"id":2}]\n')
+        with patch.object(gh.subprocess, "run", return_value=outcome) as run:
+            self.assertEqual(
+                transport.api("repos/example/releases", paginate=True),
+                [[], [{"id": 2}]],
+            )
+            self.assertNotIn("--slurp", run.call_args.args[0])
+
+    def test_read_only_transport_cannot_create_release(self):
+        transport = gh.GitHub(None)
+        with (
+            patch.object(transport, "api") as api,
+            self.assertRaisesRegex(ValueError, "read-only"),
+        ):
+            transport.create_draft("v1", "marker")
+        api.assert_not_called()
+
     def test_paginated_draft_lookup(self):
         transport = gh.GitHub("a" * 40)
         release = {"id": 2, "tag_name": "wanted", "draft": True}
