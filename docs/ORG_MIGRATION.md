@@ -29,11 +29,23 @@ unchanged. Preserve approved media and historical evidence/URLs.
 The owner's handoff records paused publisher/controllers, MainPID=0 and stopped
 watchdog timers. A later read-only systemd check found the release service inactive
 with MainPID=0, but `ocf-codex-release-20261111-watchdog.timer` active/waiting;
-the continuation watchdog timer remained inactive. This is a transfer blocker
-until the release coordinator reconciles the hold. The coordinator owns the
-current service-state verification; this preparation must not modify services.
-No services were changed.
-Recheck actual process identities before transfer; do not restart services. Prior release owner `01a1c834-7486-73c2-8c2f-13f7c512577b` stays paused.
+the continuation watchdog timer remained inactive. That discrepancy was a
+transfer blocker until the release coordinator reconciled the hold.
+
+Follow-up read-only verification confirmed the coordinator's correction: all nine
+primary, continuation and approved59 publisher service/watchdog/timer units are
+inactive/dead, all service MainPIDs are 0, and their WantedBy/RequiredBy/TriggeredBy
+startup dependencies are empty. The primary/continuation controllers and watchdog
+timers are disabled; the publisher units remain linked, not enabled, with no
+startup dependencies. The operational discrepancy is resolved at this checkpoint.
+Draft 441878809 remains unpublished with 481 assets and the unchanged marker/target;
+source PR #36 remains open/unmerged at head 29ce4df. Both repositories still have
+the original names and stable IDs above.
+
+The release coordinator owns the hold. The migration preparation changed no
+services. Recheck identities/state immediately before transfer; do not restart
+services or interpret this checkpoint as publication approval. Prior release owner
+`01a1c834-7486-73c2-8c2f-13f7c512577b` stays paused.
 
 ## Pre-transfer go/no-go
 
