@@ -148,3 +148,42 @@ python scripts/refresh_catalog.py --output /path/to/new-catalog.json
 ```
 
 This never uploads audio, edits a release, or deploys Pages.
+
+## Import verified source exports
+
+Run the source repository's `audio export-public` command first. Then import the
+explicit `export-candidate.json` files into a new local bundle:
+
+```bash
+python scripts/import_candidates.py /path/to/session/export-candidate.json \
+  /path/to/preparation/export-candidate.json \
+  --tag audio-example-v1 --edition 1.0.0 --output /path/to/new-bundle
+```
+
+The importer verifies every copied byte, the technical receipt, source revision,
+edition and session identity. Preparation Learning remains separate and sorts
+first. Human-readable local filenames are retained. Explicit ASCII remote names
+include a filename digest to prevent Unicode normalization collisions on GitHub.
+The resulting `publication.json` is suitable for publisher preflight; it supplies
+no owner approval and uploads nothing. Existing outputs are never overwritten,
+and failed staging is retained for diagnosis. Do not import private delivery
+receipts directly or add the local asset bundle to Git.
+
+## Assemble the owner review packet
+
+Prepare individual files, optional collection ZIPs, publication metadata and an
+exact proposed asset list in one fresh local directory:
+
+```sh
+python scripts/prepare_review.py /path/to/export-candidate.json \
+  --tag audio-review-v1 --edition 0.1.0 --collections --output /path/to/new-review
+```
+
+The `assets/` directory contains the publisher input, release notes and public
+checksums. Public `SHA256SUMS.txt` uses the approved transport names; local
+`LOCAL-SHA256SUMS.txt` uses readable local names and can be checked from `assets/`.
+`review.json` lists exact sizes, digests, sessions and proposed URLs. Those URLs
+do not claim that assets exist remotely. The packet is not an approval record:
+listening, content/artwork rights, voice redistribution and final publication
+remain owner decisions. No remote API is called. Preserve failed assembly
+directories for diagnosis. Keep the complete packet outside Git.

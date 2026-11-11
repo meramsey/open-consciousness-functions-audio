@@ -1,6 +1,7 @@
 # Official audio release readiness
 
-Audit date: 2026-11-10. This is an engineering checkpoint, not publication approval.
+Historical audit date: 2026-11-10. This is an engineering checkpoint, not publication approval.
+The SHAs and remote results below describe that audit, not a fresh remote check.
 
 ## Repository state
 
@@ -35,6 +36,23 @@ Audit date: 2026-11-10. This is an engineering checkpoint, not publication appro
    Successful rendering, technical checks, or a draft release are not approval.
 6. New-commit cross-platform CI, deployment smoke tests and a phone/browser
    release-candidate review remain outstanding.
+
+## Local continuation, 2026-11-11
+
+The saved source exporter now prepares retained FLAC/MP3 deliveries without
+rendering again. It rejects hidden artwork metadata, verifies full-scale PCM
+rails, preserves lossless packets and records frozen-tree render provenance
+separately from export code. The distribution importer rejects unexpected
+technical fields and binds candidate and receipt measurements. The review-packet
+command assembles exact individual assets, optional collections, controls,
+checksums and proposed URLs while leaving all owner decisions pending.
+
+Preparation Learning and Relax A6 deliveries are local candidate inputs. Both
+retained receipts explicitly set human listening and publication approval false.
+Their existence grants no public upload or voice/artwork redistribution rights.
+The public catalog remains empty until approved publication is independently
+verified. Current branch tests, real candidate hashes and remaining gates belong
+in the local continuation receipt; historical CI above does not cover this work.
 
 ## Publication contract and recovery
 
