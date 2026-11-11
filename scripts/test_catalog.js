@@ -1,0 +1,16 @@
+const assert = require('assert');
+const {safeURL, entries, filterEntries, downloadList} = require('../site/assets/js/app.js');
+assert.strictEqual(safeURL('javascript:alert(1)'), null);
+assert.strictEqual(safeURL('https://user:pass@example.com/file'), null);
+assert.strictEqual(safeURL('file:///private'), null);
+const asset = {asset_id: 'a', format: 'mp3', filename: 'Example.mp3', sha256: 'a'.repeat(64), download_url: 'https://example.com/Example.mp3'};
+const catalog = {releases: [{version:'1.0', date:'2026-01-01', release_url:'https://example.com/release', functions:[{function_id:'OCF-FND-001', title:'Example', sessions:[{locale:'en-US', voice_id:'voice-a', voice_name:'Example Voice', assets:[asset]}]}], preparations:[{title:'Preparation Learning', sessions:[{locale:'en-US', voice_id:'voice-a', assets:[asset]}]}]}]};
+const rows = entries(catalog);
+assert.strictEqual(rows.length, 2);
+assert.strictEqual(rows[0].id, 'preparation-learning');
+assert.strictEqual(filterEntries(rows, 'EXAMPLE', 'en-US', 'voice-a').length, 1);
+assert.strictEqual(filterEntries(rows, '', 'fr-FR', '').length, 0);
+assert.strictEqual(filterEntries(rows, 'OCF-FND-001', '', '').length, 1);
+assert(downloadList([asset]).includes(asset.sha256));
+assert(downloadList([asset]).includes(asset.download_url));
+console.log('Catalog logic: 10 assertions passed');

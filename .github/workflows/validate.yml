@@ -4,19 +4,32 @@ on:
   pull_request:
   push:
     branches: [main]
+  workflow_dispatch:
 
 permissions:
   contents: read
 
 jobs:
   validate:
-    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+        python: ['3.11', '3.12']
+    runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
-          python-version: '3.x'
+          python-version: ${{ matrix.python }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
       - name: Validate site and catalog
         run: python scripts/validate_site.py
-      - name: Run validator tests
+      - name: Run offline publication and catalog tests
         run: python -m unittest discover -s scripts -p 'test_*.py'
+      - name: Check browser script syntax
+        run: node --check site/assets/js/app.js
+      - name: Test catalog search and selection logic
+        run: node scripts/test_catalog.js

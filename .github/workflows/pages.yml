@@ -1,9 +1,15 @@
 name: Deploy GitHub Pages
+run-name: Verified audio library ${{ inputs.release_tag || github.sha }}
 
 on:
   push:
     branches: [main]
   workflow_dispatch:
+    inputs:
+      release_tag:
+        description: Optional published audio tag for the audit trail (all published manifests are verified)
+        type: string
+        required: false
 
 permissions:
   contents: read
@@ -14,14 +20,31 @@ concurrency:
 
 jobs:
   validate:
+    if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
-          python-version: '3.x'
-      - run: python scripts/validate_site.py
+          python-version: '3.12'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
       - run: python -m unittest discover -s scripts -p 'test_*.py'
+      - run: node scripts/test_catalog.js
+      - name: Rebuild from verified owner-published manifests
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          python scripts/refresh_catalog.py --output verified-catalog.json
+          python -c "from pathlib import Path; Path('verified-catalog.json').replace('site/catalog.json')"
+      - run: python scripts/validate_site.py
+      - uses: actions/upload-artifact@v4
+        with:
+          name: verified-site
+          path: site/
+          include-hidden-files: true
+          retention-days: 30
 
   deploy:
     needs: validate
@@ -33,7 +56,10 @@ jobs:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: verified-site
+          path: site/
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
         with:
