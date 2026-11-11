@@ -10,12 +10,34 @@ DEFAULT_ROOT = Path(__file__).resolve().parents[1] / "migration-attestations"
 
 
 def validate_bundle(bundle):
-    fields(bundle, ("schema_version", "manifest", "before", "after", "attestation"))
-    require(
-        type(bundle["schema_version"]) is int and bundle["schema_version"] == 1,
-        "unsupported transfer bundle schema",
-    )
-    expected = build_attestation(bundle["manifest"], bundle["before"], bundle["after"])
+    require(type(bundle) is dict, "expected transfer bundle object")
+    version = bundle.get("schema_version")
+    require(type(version) is int, "unsupported transfer bundle schema")
+    if version == 1:
+        fields(bundle, ("schema_version", "manifest", "before", "after", "attestation"))
+        expected = build_attestation(
+            bundle["manifest"], bundle["before"], bundle["after"]
+        )
+    elif version == 2:
+        from reconcile_historical_transfer import MODE, build_attestation_v2
+
+        fields(
+            bundle,
+            (
+                "schema_version",
+                "mode",
+                "manifest",
+                "historical",
+                "after",
+                "attestation",
+            ),
+        )
+        require(bundle["mode"] == MODE, "unexpected registry bundle mode")
+        expected = build_attestation_v2(
+            bundle["manifest"], bundle["historical"], bundle["after"]
+        )
+    else:
+        raise ValueError("unsupported transfer bundle schema")
     require(
         canonical_bytes(bundle["attestation"]) == canonical_bytes(expected),
         "registry attestation differs from transfer evidence",
@@ -39,7 +61,13 @@ class TransferRegistry:
         self.index_sha256 = identity(index)
         self._bundles = {}
         for entry in index["entries"]:
-            fields(entry, ("release_id", "attestation_sha256", "bundle_sha256"))
+            fields(
+                entry, ("release_id", "attestation_sha256", "bundle_sha256"), ("mode",)
+            )
+            if "mode" in entry:
+                from reconcile_historical_transfer import MODE
+
+                require(entry["mode"] == MODE, "unexpected registry entry mode")
             positive_id(entry["release_id"])
             digest(entry["attestation_sha256"])
             digest(entry["bundle_sha256"])
@@ -50,6 +78,14 @@ class TransferRegistry:
             require(
                 identity(bundle) == entry["bundle_sha256"],
                 "registry bundle digest mismatch",
+            )
+            require(
+                (
+                    bundle.get("schema_version") == 2
+                    and entry.get("mode") == bundle.get("mode")
+                )
+                or (bundle.get("schema_version") == 1 and "mode" not in entry),
+                "registry entry/bundle mode mismatch",
             )
             attestation = validate_bundle(bundle)
             require(

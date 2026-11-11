@@ -9,6 +9,7 @@ import copy
 import os
 import re
 import subprocess
+from contextlib import contextmanager
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from urllib.parse import quote
@@ -22,6 +23,7 @@ from publication import (
     require,
 )
 from publisher import save_receipt
+from reconcile_historical_transfer import MODE, verify_reconciliation_v2
 from reconcile_transfer import (
     PUBLISHER,
     REPOSITORY_ID,
@@ -37,6 +39,7 @@ from reconcile_transfer import (
 from transfer_registry import DEFAULT_ROOT, load_registry
 
 ROOT = Path(__file__).resolve().parents[1]
+RELEASE_STATE_ROOT = Path.home() / ".local" / "state" / "ocf-transfer-finalizer"
 SOURCE = "ocfproject-org/open-consciousness-functions"
 SOURCE_ID = 1367603146
 REQUIRED_WORKFLOWS = {
@@ -45,6 +48,36 @@ REQUIRED_WORKFLOWS = {
 }
 PURPOSE = "publish-transferred-draft"
 RECEIPT_PURPOSE = "ocf-transferred-draft-finalization"
+
+
+def durable_exclusive(path, record):
+    with path.open("xb") as stream:
+        stream.write(canonical_bytes(record))
+        stream.flush()
+        os.fsync(stream.fileno())
+    if hasattr(os, "O_DIRECTORY"):
+        descriptor = os.open(path.parent, os.O_RDONLY | os.O_DIRECTORY)
+        try:
+            os.fsync(descriptor)
+        finally:
+            os.close(descriptor)
+
+
+@contextmanager
+def release_writer_lock(release_id):
+    positive_id(release_id)
+    root = RELEASE_STATE_ROOT.absolute()
+    require(
+        not any(p.is_symlink() for p in (root, *root.parents)),
+        "symlink in release state path",
+    )
+    root.mkdir(parents=True, exist_ok=True, mode=0o700)
+    lock = root / f"{REPOSITORY_ID}-{release_id}.lock"
+    durable_exclusive(lock, {"pid": os.getpid(), "release_id": release_id})
+    try:
+        yield
+    finally:
+        lock.unlink()
 
 
 def commit(value):
@@ -61,14 +94,33 @@ def verify_final_approval(bundle, registry, original, reconciliation, approval, 
     require(
         timestamp(original["approved_at"]) <= now, "original approval is from future"
     )
-    verify_reconciliation(
-        manifest,
-        bundle["before"],
-        bundle["after"],
-        attestation,
-        reconciliation,
-        now=now,
-    )
+    v2 = bundle["schema_version"] == 2
+    if v2:
+        require(bundle.get("mode") == MODE, "unsupported transfer mode")
+        require(
+            identity(original)
+            == attestation["original_rights_approval_canonical_sha256"],
+            "original rights differ from historical provenance",
+        )
+        verify_reconciliation_v2(
+            manifest,
+            bundle["historical"],
+            bundle["after"],
+            attestation,
+            reconciliation,
+            now=now,
+        )
+    else:
+        require(bundle["schema_version"] == 1, "unsupported transfer bundle")
+        verify_reconciliation(
+            manifest,
+            bundle["before"],
+            bundle["after"],
+            attestation,
+            reconciliation,
+            now=now,
+        )
+    extra = ("mode", "uncertainty_acknowledgement_canonical_sha256") if v2 else ()
     fields(
         approval,
         (
@@ -96,10 +148,12 @@ def verify_final_approval(bundle, registry, original, reconciliation, approval, 
             "artwork_redistribution",
             "release_hold_lifted",
             "publish",
+            *extra,
         ),
     )
     require(
-        type(approval["schema_version"]) is int and approval["schema_version"] == 1,
+        type(approval["schema_version"]) is int
+        and approval["schema_version"] == (2 if v2 else 1),
         "unsupported final approval schema",
     )
     bindings = {
@@ -118,6 +172,13 @@ def verify_final_approval(bundle, registry, original, reconciliation, approval, 
         "original_approval_sha256": identity(original),
         "reconciliation_approval_sha256": identity(reconciliation),
     }
+    if v2:
+        bindings.update(
+            mode=MODE,
+            uncertainty_acknowledgement_canonical_sha256=attestation[
+                "uncertainty_acknowledgement_canonical_sha256"
+            ],
+        )
     for key, expected in bindings.items():
         require(
             type(approval[key]) is type(expected) and approval[key] == expected,
@@ -242,6 +303,14 @@ def finalize_transfer(
         "final_approval_sha256": identity(final_approval),
         "registry_sha256": registry.index_sha256,
     }
+    if bundle["schema_version"] == 2:
+        binding.update(
+            schema_version=2,
+            mode=MODE,
+            uncertainty_acknowledgement_canonical_sha256=bundle["attestation"][
+                "uncertainty_acknowledgement_canonical_sha256"
+            ],
+        )
     lock = path.with_suffix(path.suffix + ".lock")
     # Same receipt is the serialization boundary; supervisor must also enforce
     # one owner per release across hosts. Never delete an unexplained stale lock.
@@ -553,7 +622,11 @@ class TransferGitHub:
             asset["download_sha256"] = hashes[asset["id"]]
         return after
 
-    def finalize_existing(
+    def finalize_existing(self, release_id, **kwargs):
+        with release_writer_lock(release_id):
+            return self._finalize_existing_locked(release_id, **kwargs)
+
+    def _finalize_existing_locked(
         self,
         release_id,
         *,
@@ -596,6 +669,20 @@ class TransferGitHub:
             and intent.get("registry_sha256") == registry.index_sha256,
             "finalization needs the matching durable intent",
         )
+        if bundle["schema_version"] == 2:
+            require(
+                intent.get("schema_version") == 2
+                and intent.get("mode") == MODE
+                and intent.get("uncertainty_acknowledgement_canonical_sha256")
+                == self.attestation["uncertainty_acknowledgement_canonical_sha256"],
+                "intent mode or uncertainty acknowledgement mismatch",
+            )
+        else:
+            require(
+                "mode" not in intent
+                and "uncertainty_acknowledgement_canonical_sha256" not in intent,
+                "v1 intent cannot contain v2 mode",
+            )
         validate_current(
             self.snapshot(download=False), bundle, datetime.now(UTC), published=False
         )
@@ -611,23 +698,21 @@ class TransferGitHub:
         # concurrent callers. Never remove/reuse this marker after any outcome.
         intent_path = Path(intent_path).absolute()
         attempt = intent_path.with_suffix(intent_path.suffix + ".attempt")
-        with attempt.open("xb") as stream:
-            stream.write(
-                canonical_bytes(
-                    {
-                        "purpose": "ocf-transfer-mutation-attempt",
-                        "intent_sha256": identity(intent),
-                    }
-                )
+        # Permanent release-wide attempt marker prevents switching receipt paths
+        # after a lost response. It is never automatically removed or reset.
+        release_attempt = RELEASE_STATE_ROOT / f"{REPOSITORY_ID}-{release_id}.attempt"
+        attempt_record = {
+            "purpose": "ocf-transfer-mutation-attempt",
+            "intent_sha256": identity(intent),
+            "mode": bundle.get("mode", "strict-v1"),
+            "attestation_sha256": identity(self.attestation),
+        }
+        if bundle["schema_version"] == 2:
+            attempt_record["uncertainty_acknowledgement_canonical_sha256"] = (
+                self.attestation["uncertainty_acknowledgement_canonical_sha256"]
             )
-            stream.flush()
-            os.fsync(stream.fileno())
-        if hasattr(os, "O_DIRECTORY"):
-            descriptor = os.open(attempt.parent, os.O_RDONLY | os.O_DIRECTORY)
-            try:
-                os.fsync(descriptor)
-            finally:
-                os.close(descriptor)
+        durable_exclusive(release_attempt, attempt_record)
+        durable_exclusive(attempt, attempt_record)
         save_receipt(intent_path, dict(intent, state="mutation-attempted"))
         # This adapter has exactly one mutation shape and rechecks every gate at
         # the transport boundary too. No standalone unapproved PATCH route.

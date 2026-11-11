@@ -280,3 +280,42 @@ authenticated real before/after full-byte evidence, route its exact new approval
 and review/merge its public registry entry. Then it must prepare the final approval
 against exact green main SHAs and keep the release held until the owner grants
 that decision. No media reupload or old control rewrite is needed for this path.
+
+## Explicit historical-receipt mode (v2)
+
+The separate `historical-receipt-v2` mode supports a historical full-download
+receipt when terminal-time tag and commit API observations were not retained.
+Version 1 remains strict. There is no fallback from a failed v1 validation.
+Unknown historical tag state is never encoded as observed absence, and current
+Git objects or API results are never backdated as historical observations.
+
+V2 binds the historical manifest, full receipt/inventory, frozen verifier-code
+hashes and archived provenance. Raw archived file hashes and canonical normalized
+JSON hashes are distinct domains. The supervisor must authenticate the archive and
+original owner messages; matching hashes and strings cannot authenticate themselves.
+The new destination evidence still requires full byte verification, exact repository
+and release identities, resolved target commit, and a currently absent tag. An
+existing tag stops this narrow mode for separate review, even if it resolves to the
+same target. Metadata observations around byte verification must remain consistent.
+
+The new reconciliation approval must explicitly acknowledge unverified historical
+tag continuity and authorize the exact current absent-tag creation scope, while
+keeping `publish: false`. Final approval is a separate decision. Mode and the
+uncertainty acknowledgement are bound through attestations, registry entries,
+approvals, finalization receipts and catalog entries. Unknown modes and cross-version
+substitutions fail closed. The committed registry remains empty; synthetic tests
+never create real approvals or historical evidence.
+
+Before finalization, the current tag must still be absent. After publication, only
+the approved newly created lightweight tag at the exact frozen commit is accepted.
+Response loss permits read-only reconciliation; it cannot cause another PATCH.
+The native adapter also serializes writers per repository/release in
+`~/.local/state/ocf-transfer-finalizer` and retains a permanent per-release attempt
+marker. Changing receipt paths cannot bypass that marker. Do not remove markers
+or stale locks automatically. Across hosts, the supervisor must enforce one writer
+and keep competing release/tag services held. GitHub does not offer an atomic tag
+compare-and-swap through release PATCH; unresolved competing writers block release.
+
+The owner must see the concrete historical uncertainty in the eventual approval
+request. Migration engineering authorization does not accept that uncertainty on
+the owner's behalf or grant publication permission.

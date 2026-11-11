@@ -382,7 +382,10 @@ class NativeGateTests(unittest.TestCase):
                 "final_approval": final,
                 "intent_path": intent,
             }
-            with patch.object(f, "datetime") as clock:
+            with (
+                patch.object(f, "RELEASE_STATE_ROOT", root / "state"),
+                patch.object(f, "datetime") as clock,
+            ):
                 clock.now.return_value = NOW
                 with self.assertRaises(ValueError):
                     remote.finalize_existing(17, **kwargs)
@@ -414,11 +417,35 @@ class NativeGateTests(unittest.TestCase):
                 intent.write_bytes(canonical_bytes(pending))
                 with self.assertRaises(FileExistsError):
                     remote.finalize_existing(17, **kwargs)
+                # A new receipt path cannot bypass the permanent release marker.
+                other = root / "other-intent.json"
+                other.write_bytes(canonical_bytes(pending))
+                with self.assertRaises(FileExistsError):
+                    remote.finalize_existing(17, **dict(kwargs, intent_path=other))
                 remote._api.api.assert_called_once_with(
                     remote._api.base + "/releases/17",
                     method="PATCH",
                     body={"draft": False, "make_latest": "false"},
                 )
+
+
+class ReleaseWriterTests(unittest.TestCase):
+    def test_release_lock_excludes_other_receipts_and_preserves_foreign_lock(self):
+        with (
+            tempfile.TemporaryDirectory() as directory,
+            patch.object(f, "RELEASE_STATE_ROOT", Path(directory).resolve() / "state"),
+        ):
+            with f.release_writer_lock(17):
+                with self.assertRaises(FileExistsError), f.release_writer_lock(17):
+                    self.fail("competing release writer admitted")
+                self.assertTrue(
+                    (f.RELEASE_STATE_ROOT / f"{f.REPOSITORY_ID}-17.lock").exists()
+                )
+                with f.release_writer_lock(18):
+                    pass
+            self.assertFalse(
+                (f.RELEASE_STATE_ROOT / f"{f.REPOSITORY_ID}-17.lock").exists()
+            )
 
 
 if __name__ == "__main__":

@@ -192,7 +192,7 @@ def append_release(catalog, release, *, registry=None):
 
 
 def transferred_release_entry(
-    manifest, remote_release, remote_assets, *, registry=None
+    manifest, remote_release, remote_assets, *, registry=None, tag_ref=None
 ):
     """Project a published legacy manifest only through a pinned transfer bundle."""
     from reconcile_transfer import LEGACY_REPOSITORY, PUBLISHER, REPOSITORY_ID, identity
@@ -202,6 +202,18 @@ def transferred_release_entry(
     bundle = registry.resolve(manifest, remote_release["id"])
     attestation = bundle["attestation"]
     original = bundle["after"]["release"]
+    if bundle["schema_version"] == 2:
+        target = attestation["distribution_commit"]
+        require(
+            tag_ref
+            == {
+                "ref": "refs/tags/" + attestation["tag"],
+                "object_type": "commit",
+                "object_sha": target,
+                "peeled_commit": target,
+            },
+            "v2 catalog needs exact published tag",
+        )
     require(
         remote_release.get("draft") is False, "transferred release is not published"
     )
@@ -247,4 +259,11 @@ def transferred_release_entry(
         release_id=remote_release["id"],
         migration_attestation_sha256=identity(attestation),
     )
+    if bundle["schema_version"] == 2:
+        release.update(
+            migration_mode=bundle["mode"],
+            migration_uncertainty_canonical_sha256=attestation[
+                "uncertainty_acknowledgement_canonical_sha256"
+            ],
+        )
     return release

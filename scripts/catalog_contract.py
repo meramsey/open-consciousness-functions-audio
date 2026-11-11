@@ -250,7 +250,19 @@ def validate_transferred_release(release, *, registry=None):
         release["publication_manifest_sha256"] == identity(bundle["manifest"]),
         "catalog original manifest digest mismatch",
     )
-    ordinary = {k: v for k, v in release.items() if k not in TRANSFER_FIELDS}
+    extra = ("migration_mode", "migration_uncertainty_canonical_sha256")
+    if bundle["schema_version"] == 2:
+        require(
+            release.get("migration_mode") == bundle["mode"]
+            and release.get("migration_uncertainty_canonical_sha256")
+            == attestation["uncertainty_acknowledgement_canonical_sha256"],
+            "catalog transfer mode/uncertainty mismatch",
+        )
+    else:
+        require(
+            not any(k in release for k in extra), "v1 catalog cannot contain v2 mode"
+        )
+    ordinary = {k: v for k, v in release.items() if k not in (*TRANSFER_FIELDS, *extra)}
     ordinary["publication_manifest_sha256"] = attestation["destination_manifest_sha256"]
     reconstructed = validate_release(ordinary)
     reconstructed["repository"] = LEGACY_REPOSITORY
