@@ -7,7 +7,9 @@ import re
 from pathlib import Path
 from urllib.parse import quote
 
-REPOSITORY = "meramsey/open-consciousness-functions-audio"
+REPOSITORY = "ocfproject-org/open-consciousness-functions-audio"
+# Human release authors are independent of the fixed organization destination.
+AUTHORIZED_PUBLISHERS = frozenset({"meramsey"})
 HEX = re.compile(r"[a-f0-9]{64}\Z")
 IDENTIFIER = re.compile(r"[A-Za-z0-9][A-Za-z0-9._+-]{0,127}\Z")
 FORMATS = {

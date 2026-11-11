@@ -76,6 +76,20 @@ class PublicationTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "exact manifest"):
             p.verify_approval(manifest, record)
 
+    def test_old_destination_is_rejected_and_old_approval_cannot_rebind(self):
+        manifest = fixture()
+        old_manifest = copy.deepcopy(manifest)
+        old_manifest["repository"] = "meramsey/open-consciousness-functions-audio"
+        with self.assertRaisesRegex(ValueError, "unexpected distribution repository"):
+            p.validate_manifest(old_manifest)
+        record = approval(manifest)
+        record["manifest_sha256"] = hashlib.sha256(
+            p.canonical_bytes(old_manifest)
+        ).hexdigest()
+        with self.assertRaisesRegex(ValueError, "exact manifest"):
+            p.verify_approval(manifest, record)
+        self.assertEqual(manifest["assets"], old_manifest["assets"])
+
     def test_each_right_is_explicit_boolean(self):
         for key in ("public_assets", "voice_redistribution", "artwork_redistribution"):
             for value in (False, 1, "true", None):

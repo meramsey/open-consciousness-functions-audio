@@ -12,8 +12,8 @@ def empty_catalog():
         "schema_version": 1,
         "catalog_id": "ocf-audio-library",
         "project_name": "Open Consciousness Functions",
-        "source_repository": "https://github.com/meramsey/open-consciousness-functions",
-        "distribution_repository": "https://github.com/meramsey/open-consciousness-functions-audio",
+        "source_repository": "https://github.com/ocfproject-org/open-consciousness-functions",
+        "distribution_repository": "https://github.com/ocfproject-org/open-consciousness-functions-audio",
         "releases": [],
     }
 

@@ -145,6 +145,29 @@ class GitHubTests(unittest.TestCase):
                 any(c.kwargs.get("method") == "POST" for c in request.call_args_list)
             )
 
+    def test_wrong_upload_destination_never_writes(self):
+        transport = gh.GitHub("a" * 40)
+        expected = "https://uploads.github.com/repos/ocfproject-org/open-consciousness-functions-audio/releases/1/assets"
+        for url in (
+            expected.replace("ocfproject-org", "meramsey"),
+            expected.replace("open-consciousness-functions-audio", "another-repo"),
+            expected.replace("releases/1", "releases/2"),
+            expected.replace("uploads.github.com", "example.org"),
+            expected + "?redirect=1",
+            expected + "#fragment",
+        ):
+            with (
+                self.subTest(url=url),
+                patch.object(transport, "api", return_value={
+                    "id": 1, "draft": True, "target_commitish": "a" * 40,
+                    "upload_url": url,
+                }),
+                patch.object(gh.subprocess, "run") as upload,
+            ):
+                with self.assertRaisesRegex(ValueError, "unexpected GitHub upload URL"):
+                    transport.upload(1, Path("example.flac"))
+                upload.assert_not_called()
+
     def test_upload_uses_staged_file_and_encoded_name_without_clobber(self):
         transport = gh.GitHub("a" * 40)
         path = Path("/example/Readable title.flac")
@@ -152,7 +175,7 @@ class GitHubTests(unittest.TestCase):
             "id": 1,
             "draft": True,
             "target_commitish": "a" * 40,
-            "upload_url": "https://uploads.github.com/repos/meramsey/open-consciousness-functions-audio/releases/1/assets{?name,label}",
+            "upload_url": "https://uploads.github.com/repos/ocfproject-org/open-consciousness-functions-audio/releases/1/assets{?name,label}",
         }
         with patch.object(
             gh.subprocess,

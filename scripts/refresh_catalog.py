@@ -15,7 +15,7 @@ from pathlib import Path
 from catalog import append_release, release_entry
 from github_publisher import GitHub
 from publication import (
-    REPOSITORY,
+    AUTHORIZED_PUBLISHERS,
     canonical_bytes,
     control_artifacts,
     manifest_digest,
@@ -37,8 +37,8 @@ def build_catalog(base, releases, list_assets, read_manifest):
             ignored.append(release.get("tag_name"))
             continue
         require(
-            release.get("author", {}).get("login") == REPOSITORY.split("/")[0],
-            "release publisher is not the repository owner",
+            release.get("author", {}).get("login") in AUTHORIZED_PUBLISHERS,
+            "release publisher is not authorized",
         )
         assets = list_assets(release["id"])
         require(

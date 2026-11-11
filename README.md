@@ -1,10 +1,13 @@
 # Open Consciousness Functions — Audio Library
 
-This repository is the public audio distribution companion to the [Open Consciousness Functions (OCF) project](https://github.com/meramsey/open-consciousness-functions). It hosts the library website, catalog metadata, release information, and future publishing automation. Audio is generated and reviewed in the main project—not here—and published as GitHub Release assets rather than committed to Git.
+This repository is the public audio distribution companion to the [Open Consciousness Functions (OCF) project](https://github.com/ocfproject-org/open-consciousness-functions). It hosts the library website, catalog metadata, release information, and future publishing automation. Audio is generated and reviewed in the main project—not here—and published as GitHub Release assets rather than committed to Git.
 
-**Website:** https://meramsey.github.io/open-consciousness-functions-audio/
+**Planned website:** https://ocfproject.org (domain cutover pending).
 
-**Releases:** https://github.com/meramsey/open-consciousness-functions-audio/releases
+Migration preparation targets `ocfproject-org`; publication remains held. See
+[the transfer checklist](docs/ORG_MIGRATION.md) before activating these changes.
+
+**Releases:** https://github.com/ocfproject-org/open-consciousness-functions-audio/releases
 
 ## Publication status
 

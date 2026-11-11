@@ -9,7 +9,7 @@ from test_publication import approval, fixture
 
 
 class Remote:
-    repository = "meramsey/open-consciousness-functions-audio"
+    repository = "ocfproject-org/open-consciousness-functions-audio"
 
     def __init__(self):
         self.release = None
