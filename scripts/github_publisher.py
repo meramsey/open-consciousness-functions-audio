@@ -78,7 +78,24 @@ class GitHub:
             release for page in pages for release in page if release["tag_name"] == tag
         ]
         require(len(matches) <= 1, "duplicate remote release tags")
-        return matches[0] if matches else None
+        release = matches[0] if matches else None
+        if release and self.target_commit is not None:
+            require(
+                release.get("target_commitish") == self.target_commit,
+                "existing release targets another distribution commit",
+            )
+            self.verify_tag_target(tag)
+        return release
+
+    def verify_tag_target(self, tag):
+        """Never adopt or move a tag that names another distribution revision."""
+        refs = self.api(self.base + "/git/matching-refs/tags/" + quote(tag, safe=""))
+        if any(ref["ref"] == "refs/tags/" + tag for ref in refs):
+            resolved = self.api(self.base + "/commits/" + quote(tag, safe=""))
+            require(
+                resolved["sha"] == self.target_commit,
+                "existing tag points to another commit",
+            )
 
     def create_draft(self, tag, marker):
         require(
@@ -88,14 +105,7 @@ class GitHub:
         commit = self.api(self.base + "/commits/" + self.target_commit)
         require(commit["sha"] == self.target_commit, "distribution commit not found")
         # Existing tags must resolve to the intended commit; do not move tags.
-        refs = self.api(self.base + "/git/matching-refs/tags/" + quote(tag, safe=""))
-        matches = [ref for ref in refs if ref["ref"] == "refs/tags/" + tag]
-        if matches:
-            resolved = self.api(self.base + "/commits/" + quote(tag, safe=""))
-            require(
-                resolved["sha"] == self.target_commit,
-                "existing tag points to another commit",
-            )
+        self.verify_tag_target(tag)
         return self.api(
             self.base + "/releases",
             method="POST",
@@ -117,9 +127,12 @@ class GitHub:
         return [asset for page in pages for asset in page]
 
     def upload(self, release_id, path):
+        require(self.target_commit is not None, "read-only transport cannot upload")
         release = self.api(self.base + f"/releases/{int(release_id)}")
         require(
-            release["id"] == release_id and release["draft"] is True,
+            release["id"] == release_id
+            and release["draft"] is True
+            and release.get("target_commitish") == self.target_commit,
             "upload target is not the expected draft",
         )
         upload_url = release["upload_url"].split("{", 1)[0]
