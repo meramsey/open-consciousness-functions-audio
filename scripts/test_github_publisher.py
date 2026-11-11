@@ -62,12 +62,70 @@ class GitHubTests(unittest.TestCase):
 
     def test_paginated_draft_lookup(self):
         transport = gh.GitHub("a" * 40)
-        release = {"id": 2, "tag_name": "wanted", "draft": True}
+        release = {
+            "id": 2,
+            "tag_name": "wanted",
+            "draft": True,
+            "target_commitish": "a" * 40,
+        }
         with patch.object(
-            transport, "api", return_value=[[{"tag_name": "other"}], [release]]
+            transport, "api", side_effect=[[[{"tag_name": "other"}], [release]], []]
         ) as request:
             self.assertEqual(transport.find_release("wanted"), release)
-            self.assertTrue(request.call_args.kwargs["paginate"])
+            self.assertTrue(request.call_args_list[0].kwargs["paginate"])
+
+    def test_existing_draft_with_another_target_is_never_adopted(self):
+        transport = gh.GitHub("a" * 40)
+        release = {"id": 2, "tag_name": "wanted", "target_commitish": "b" * 40}
+        with patch.object(transport, "api", return_value=[[release]]) as request:
+            with self.assertRaisesRegex(ValueError, "another distribution commit"):
+                transport.find_release("wanted")
+            self.assertEqual(request.call_count, 1)
+
+    def test_existing_draft_tag_cannot_name_another_commit(self):
+        transport = gh.GitHub("a" * 40)
+        release = {"id": 2, "tag_name": "wanted", "target_commitish": "a" * 40}
+        with (
+            patch.object(
+                transport,
+                "api",
+                side_effect=[
+                    [[release]],
+                    [{"ref": "refs/tags/wanted"}],
+                    {"sha": "b" * 40},
+                ],
+            ),
+            self.assertRaisesRegex(ValueError, "tag points to another"),
+        ):
+            transport.find_release("wanted")
+
+    def test_existing_matching_draft_and_tag_are_reused(self):
+        transport = gh.GitHub("a" * 40)
+        release = {"id": 2, "tag_name": "wanted", "target_commitish": "a" * 40}
+        with patch.object(
+            transport,
+            "api",
+            side_effect=[[[release]], [{"ref": "refs/tags/wanted"}], {"sha": "a" * 40}],
+        ):
+            self.assertEqual(transport.find_release("wanted"), release)
+
+    def test_read_only_transport_never_uploads(self):
+        transport = gh.GitHub(None)
+        with patch.object(transport, "api") as request:
+            with self.assertRaisesRegex(ValueError, "read-only"):
+                transport.upload(1, Path("example.flac"))
+            request.assert_not_called()
+
+    def test_upload_rechecks_distribution_target_before_write(self):
+        transport = gh.GitHub("a" * 40)
+        release = {"id": 1, "draft": True, "target_commitish": "b" * 40}
+        with (
+            patch.object(transport, "api", return_value=release),
+            patch.object(gh.subprocess, "run") as upload,
+        ):
+            with self.assertRaisesRegex(ValueError, "expected draft"):
+                transport.upload(1, Path("example.flac"))
+            upload.assert_not_called()
 
     def test_tag_mismatch_never_creates_release(self):
         transport = gh.GitHub("a" * 40)
@@ -93,6 +151,7 @@ class GitHubTests(unittest.TestCase):
         transport.api = lambda endpoint: {
             "id": 1,
             "draft": True,
+            "target_commitish": "a" * 40,
             "upload_url": "https://uploads.github.com/repos/meramsey/open-consciousness-functions-audio/releases/1/assets{?name,label}",
         }
         with patch.object(

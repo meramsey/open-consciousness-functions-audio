@@ -74,6 +74,9 @@ lock requires process-identity reconciliation before removal. Network errors
 never mean a release is absent. Retry resumes by reading remote state and
 hashing downloaded bytes, not by clobbering an asset. A missing or replaced
 previously recorded release is a blocker; it is not automatically recreated.
+Existing drafts must target the exact requested distribution commit; any
+existing tag must resolve to that same commit. The transport rechecks the draft
+target immediately before each upload. Read-only transports cannot upload.
 The validated release ID is saved before the first asset operation. Final
 publication rechecks the tag, exact manifest marker and asset inventory after
 finalization before writing a successful terminal receipt.
