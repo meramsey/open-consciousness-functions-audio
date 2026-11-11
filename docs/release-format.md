@@ -1,6 +1,6 @@
 # Catalog and release format
 
-`site/catalog.json` is UTF-8 JSON with top-level `schema_version`, `catalog_id`, `project_name`, `source_repository`, `distribution_repository`, and `releases`. `published_at` is optional until the catalog is published with a release. The current supported schema version is integer `1`; an empty `releases` array is valid and is the initial state.
+`site/catalog.json` is UTF-8 JSON with top-level `schema_version`, `catalog_id`, `project_name`, `source_repository`, `distribution_repository`, and `releases`. `published_at` is optional until the catalog is published with a release. The scaffold schema version is integer `1`; production snapshots use integer `2` (see [publication contracts](PUBLICATION.md)); an empty `releases` array is valid and is the initial state.
 
 Each release has a stable `version`, `channel`, `date`, `source_ocf_commit`, `source_ocf_version`, `release_url`, `release_notes_url`, and `functions`. A function entry has stable `function_id`, display `title`, optional `description` and `category`, `languages`, `voices`, and `sessions`. Session entries represent a particular language/voice/edition/version and contain `assets`; this permits multiple editions and preserves old assets without re-uploading unchanged audio for every OCF software release.
 
@@ -11,3 +11,5 @@ Release assets should be immutable. A correction that changes bytes gets a new a
 Schema evolution increments `schema_version` for incompatible contract changes. Additive optional fields may be introduced compatibly; consumers must ignore unknown optional properties. Validators should reject unsupported major schema versions, malformed required fields/URLs, duplicate asset IDs, and invalid checksums. A production schema should additionally validate every field's exact type and relationships before the publisher writes the catalog.
 
 GitHub Release asset limits and per-file limits can change. Before publishing, check current GitHub limits; split oversized collections into clearly numbered parts and publish checksums for each part. Do not bundle all sessions into a single enormous recording. GitHub Releases remain the canonical distribution source unless an explicitly approved mirror is documented.
+
+Production catalog validation is strict in schema 2; version 1 remains readable for existing data. New publication does not silently migrate a nonempty legacy catalog.

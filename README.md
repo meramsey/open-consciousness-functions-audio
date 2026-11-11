@@ -43,3 +43,9 @@ Rendering, listening approval, licensing review, and public distribution authori
 Contributions to the website, schema, documentation, and validation are welcome through pull requests. Keep the catalog truthful, preserve stable IDs and published URLs, and run both validation commands above. Future main-repository documentation should link here with **“Listen & Download OCF Audio”**; corresponding OCF source releases may link to the sister repository's audio release without duplicating audio assets.
 
 See [architecture](docs/architecture.md) and the [publishing roadmap](docs/publishing-roadmap.md) for boundaries and planned work.
+
+## Release engineering
+
+See [publication contracts and workflow](docs/PUBLICATION.md) and the
+[readiness checkpoint](docs/release-readiness.md). The publisher defaults to offline
+verification; public audio requires explicit asset, voice, artwork and final approval.

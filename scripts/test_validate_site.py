@@ -20,14 +20,45 @@ def empty_catalog():
 
 def catalog_with_assets():
     data = empty_catalog()
-    data["releases"] = [{
-        "version": "1.0.0", "channel": "stable", "date": "2026-01-01",
-        "source_ocf_commit": "abc", "source_ocf_version": "1.0.0",
-        "release_url": "https://github.com/example/release",
-        "release_notes_url": "https://github.com/example/notes",
-        "functions": [{"function_id": "OCF-0001", "title": "Example", "languages": ["en"], "voices": ["voice-a"],
-            "sessions": [{"assets": [{"asset_id": "asset-one", "filename": "one.mp3", "format": "mp3", "download_url": "https://example.com/one.mp3", "sha256": "a" * 64}, {"asset_id": "asset-one", "filename": "two.flac", "format": "flac", "download_url": "https://example.com/two.flac", "sha256": "b" * 64}]}]}],
-    }]
+    data["releases"] = [
+        {
+            "version": "1.0.0",
+            "channel": "stable",
+            "date": "2026-01-01",
+            "source_ocf_commit": "abc",
+            "source_ocf_version": "1.0.0",
+            "release_url": "https://github.com/example/release",
+            "release_notes_url": "https://github.com/example/notes",
+            "functions": [
+                {
+                    "function_id": "OCF-0001",
+                    "title": "Example",
+                    "languages": ["en"],
+                    "voices": ["voice-a"],
+                    "sessions": [
+                        {
+                            "assets": [
+                                {
+                                    "asset_id": "asset-one",
+                                    "filename": "one.mp3",
+                                    "format": "mp3",
+                                    "download_url": "https://example.com/one.mp3",
+                                    "sha256": "a" * 64,
+                                },
+                                {
+                                    "asset_id": "asset-one",
+                                    "filename": "two.flac",
+                                    "format": "flac",
+                                    "download_url": "https://example.com/two.flac",
+                                    "sha256": "b" * 64,
+                                },
+                            ]
+                        }
+                    ],
+                }
+            ],
+        }
+    ]
     return data
 
 
@@ -41,14 +72,19 @@ class CatalogValidationTests(unittest.TestCase):
             for name in validate_site.REQUIRED:
                 target = site / name
                 target.parent.mkdir(parents=True, exist_ok=True)
-                target.write_text('{"schema_version":' if name == "catalog.json" else "", encoding="utf-8")
-            with patch.object(validate_site, "SITE", site):
-                with self.assertRaisesRegex(ValueError, "catalog.json is invalid"):
-                    validate_site.validate_site()
+                target.write_text(
+                    '{"schema_version":' if name == "catalog.json" else "",
+                    encoding="utf-8",
+                )
+            with (
+                patch.object(validate_site, "SITE", site),
+                self.assertRaisesRegex(ValueError, "catalog.json is invalid"),
+            ):
+                validate_site.validate_site()
 
     def test_unsupported_schema_is_rejected(self):
         data = empty_catalog()
-        data["schema_version"] = 2
+        data["schema_version"] = 3
         with self.assertRaisesRegex(ValueError, "unsupported schema_version"):
             validate_site.validate_catalog(data)
 
@@ -58,8 +94,12 @@ class CatalogValidationTests(unittest.TestCase):
 
     def test_invalid_sha256_is_rejected(self):
         data = catalog_with_assets()
-        data["releases"][0]["functions"][0]["sessions"][0]["assets"][1]["asset_id"] = "asset-two"
-        data["releases"][0]["functions"][0]["sessions"][0]["assets"][1]["sha256"] = "not-a-checksum"
+        data["releases"][0]["functions"][0]["sessions"][0]["assets"][1]["asset_id"] = (
+            "asset-two"
+        )
+        data["releases"][0]["functions"][0]["sessions"][0]["assets"][1]["sha256"] = (
+            "not-a-checksum"
+        )
         with self.assertRaisesRegex(ValueError, "invalid SHA-256"):
             validate_site.validate_catalog(data)
 
@@ -75,12 +115,20 @@ class CatalogValidationTests(unittest.TestCase):
             for name in validate_site.REQUIRED:
                 target = site / name
                 target.parent.mkdir(parents=True, exist_ok=True)
-                target.write_text("{}" if name == "catalog.json" else "", encoding="utf-8")
-            (site / "catalog.json").write_text(json.dumps(empty_catalog()), encoding="utf-8")
-            (site / "index.html").write_text('<a href="missing.css">x</a>', encoding="utf-8")
-            with patch.object(validate_site, "SITE", site):
-                with self.assertRaisesRegex(ValueError, "missing local href"):
-                    validate_site.validate_site()
+                target.write_text(
+                    "{}" if name == "catalog.json" else "", encoding="utf-8"
+                )
+            (site / "catalog.json").write_text(
+                json.dumps(empty_catalog()), encoding="utf-8"
+            )
+            (site / "index.html").write_text(
+                '<a href="missing.css">x</a>', encoding="utf-8"
+            )
+            with (
+                patch.object(validate_site, "SITE", site),
+                self.assertRaisesRegex(ValueError, "missing local href"),
+            ):
+                validate_site.validate_site()
 
     def test_broken_internal_navigation_is_rejected(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -88,12 +136,20 @@ class CatalogValidationTests(unittest.TestCase):
             for name in validate_site.REQUIRED:
                 target = site / name
                 target.parent.mkdir(parents=True, exist_ok=True)
-                target.write_text("{}" if name == "catalog.json" else "", encoding="utf-8")
-            (site / "catalog.json").write_text(json.dumps(empty_catalog()), encoding="utf-8")
-            (site / "index.html").write_text('<a href="#missing">x</a>', encoding="utf-8")
-            with patch.object(validate_site, "SITE", site):
-                with self.assertRaisesRegex(ValueError, "broken internal navigation"):
-                    validate_site.validate_site()
+                target.write_text(
+                    "{}" if name == "catalog.json" else "", encoding="utf-8"
+                )
+            (site / "catalog.json").write_text(
+                json.dumps(empty_catalog()), encoding="utf-8"
+            )
+            (site / "index.html").write_text(
+                '<a href="#missing">x</a>', encoding="utf-8"
+            )
+            with (
+                patch.object(validate_site, "SITE", site),
+                self.assertRaisesRegex(ValueError, "broken internal navigation"),
+            ):
+                validate_site.validate_site()
 
 
 if __name__ == "__main__":
