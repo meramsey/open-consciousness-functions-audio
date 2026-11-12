@@ -336,12 +336,10 @@ def render_markdown(markdown):
                 + "</ul>"
             )
         elif all(re.match(r"\d+\. ", line) for line in lines):
+            ordered_items = [re.sub(r"^\d+\. ", "", line) for line in lines]
             output.append(
                 "<ol>"
-                + "".join(
-                    f"<li>{_inline(re.sub(r'^\\d+\\. ', '', line))}</li>"
-                    for line in lines
-                )
+                + "".join(f"<li>{_inline(item)}</li>" for item in ordered_items)
                 + "</ol>"
             )
         else:
