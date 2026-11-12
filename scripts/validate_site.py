@@ -22,7 +22,6 @@ REQUIRED = (
     "assets/js/app.js",
     "assets/js/docs.js",
     "source.json",
-    "historical-names/index.html",
 )
 TOP_LEVEL = (
     "schema_version",
