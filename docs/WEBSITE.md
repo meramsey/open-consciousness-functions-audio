@@ -3,7 +3,11 @@
 ## Source authority
 
 Update `site/source.json` only to pin an exact reviewed source-repository
-commit that contains the public guide-exporter contract. Do not add hand-edited
+commit on the main branch that contains the public guide-exporter contract. The
+Pages workflow fetches the full OCF history and fails closed unless that exact
+commit is an ancestor of OCF main. Preview PR builds may use an unmerged source
+branch commit for cross-repository validation, but that pin must be advanced to
+the merged main commit before production Pages deployment. Do not add hand-edited
 function records to this repository. The main OCF repository owns canonical
 function identity, localized title/description, command/cue distinctions,
 procedures, lifecycle, safety, categories, tags, common uses and approved
