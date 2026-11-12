@@ -24,8 +24,10 @@ on AirPods](https://support.apple.com/guide/airpods/control-spatial-audio-and-he
 ## Output, balance, and accessibility
 
 Use **System Settings → Sound → Output** to select headphones and inspect
-balance. Review **System Settings → Accessibility → Audio** for mono playback
-and headphone accommodations. Keep accessibility settings you need; the stereo
+balance. See Apple's current guide to [change sound output settings on
+Mac](https://support.apple.com/guide/mac-help/change-the-sound-output-settings-mchlp2256/27/mac/27).
+Review **System Settings → Accessibility → Audio** for mono playback and
+headphone accommodations. Keep accessibility settings you need; the stereo
 baseline is optional, not a requirement for using the text or audio practice.
 
 ## Troubleshooting
