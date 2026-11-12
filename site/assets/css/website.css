@@ -2,7 +2,7 @@
   color-scheme: light;
   --paper: #f3f1ea;
   --ink: #18252a;
-  --muted: #667477;
+  --muted: #59686a;
   --line: #d8dbd3;
   --green: #a9c68a;
   --dark: #101a22;
@@ -60,8 +60,8 @@ body { min-width: 320px; }
 .desktop-toc a, .mobile-toc a { color: var(--muted); text-decoration: none; }
 .desktop-toc a[aria-current="location"] { color: var(--ink); font-weight: 700; }
 .mobile-toc { display: none; }
-.breadcrumbs { max-width: 76ch; margin: 0 auto 1.5rem; color: var(--muted); font-size: .83rem; }
-.breadcrumbs a { text-decoration: none; }
+.breadcrumbs { max-width: 76ch; margin: 0 auto 1.5rem; color: var(--ink); font-size: .83rem; }
+.breadcrumbs a { text-decoration: underline; text-underline-offset: .15em; }
 .docs-hero { min-height: 470px; padding: clamp(3rem, 8vw, 7rem) clamp(1.5rem, 12vw, 11rem); }
 .docs-hero .hero-copy { max-width: 760px; }
 .hero-actions { display: flex; flex-wrap: wrap; gap: .75rem; }
@@ -88,9 +88,9 @@ body { min-width: 320px; }
 .draft-badge { border: 1px solid var(--line); padding: .1rem .35rem; border-radius: 1rem; }
 .command-block { margin: 1.5rem 0; padding: clamp(1rem, 3vw, 1.6rem); border: 1px solid var(--line); border-radius: .45rem; background: var(--card); }
 .command-block h3 { margin-top: 0; }
-.display-cue, .spoken-cue { padding: .8rem 1rem; background: var(--dark-soft); color: #f4f3eb; border-radius: .3rem; overflow-wrap: anywhere; }
+.spoken-cue { display: flex; align-items: center; justify-content: space-between; gap: .75rem; padding: .8rem 1rem; background: var(--dark-soft); color: #f4f3eb; border-radius: .3rem; overflow-wrap: anywhere; }
 .field-label { color: #c1d0c5; font: .72rem var(--mono); text-transform: uppercase; letter-spacing: .06em; margin-right: .45rem; }
-.copy-cue { float: right; color: var(--ink); background: var(--accent); border: 0; padding: .3rem .55rem; border-radius: .2rem; font-size: .75rem; }
+.copy-cue { float: right; color: #18252a; background: var(--accent); border: 0; padding: .3rem .55rem; border-radius: .2rem; font-size: .75rem; }
 .command-block ol { padding-left: 1.5rem; }
 .relationship-list { padding-left: 1.2rem; }
 .relation-kind { display: block; color: var(--muted); font: .75rem var(--mono); }
@@ -149,6 +149,13 @@ body { min-width: 320px; }
   .edition-heading { align-items: flex-start; }
   .session-art { width: 4rem; height: 4rem; }
   .copy-cue { float: none; margin-left: .5rem; }
+  .reference-table { min-width: 0; table-layout: fixed; }
+  .reference-table th, .reference-table td { padding: .5rem; overflow-wrap: anywhere; }
+  .reference-table th:nth-child(3), .reference-table td:nth-child(3),
+  .reference-table th:nth-child(4), .reference-table td:nth-child(4) { display: none; }
+  .reference-table th:first-child { width: 38%; }
+  .reference-table th:nth-child(2) { width: 62%; }
+  .reference-table .copy-cue { margin: .35rem 0 0; }
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -156,10 +163,29 @@ body { min-width: 320px; }
 }
 
 @media print {
+  :root, :root[data-theme="light"], :root[data-theme="dark"] {
+    color-scheme: light;
+    --paper: #fff;
+    --ink: #111;
+    --muted: #444;
+    --line: #aaa;
+    --card: #fff;
+    --dark-soft: #eee;
+  }
   .site-header, .site-footer, .theme-toggle, .mobile-nav, .desktop-toc, .mobile-toc, .copy-cue,
-  .library-tools, .selection-tools, audio, button { display: none !important; }
-  body { background: white; color: black; font-size: 11pt; }
+  .library-tools, .selection-tools, .reference-tools, audio, button { display: none !important; }
+  body { background: #fff; color: #111; font-size: 9pt; }
   .docs-main, .docs-content { max-width: none; margin: 0; padding: 0; }
+  .page-intro { max-width: none; margin: 0 0 1rem; }
+  .table-scroll { overflow: visible; border: 0; }
+  .reference-table { width: 100%; min-width: 0; table-layout: fixed; }
+  .reference-table th:first-child { width: 20%; }
+  .reference-table th:nth-child(2) { width: 27%; }
+  .reference-table th:nth-child(3) { width: 39%; }
+  .reference-table th:nth-child(4) { width: 14%; }
+  .reference-table th, .reference-table td { padding: .35rem; color: #111; overflow-wrap: anywhere; }
+  .reference-table thead { display: table-header-group; }
+  .reference-table tr { break-inside: avoid; page-break-inside: avoid; }
   .function-grid, .relationship-grid, .path-grid { display: block; }
   a { color: black; text-decoration: underline; }
   .transcript-body { max-height: none; overflow: visible; }

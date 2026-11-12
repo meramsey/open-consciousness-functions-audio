@@ -14,6 +14,7 @@ from build_public_site import (
     _asset_specification,
     _catalog_sessions,
     _inline,
+    _public_description,
     _quick_reference,
     _recommended_settings,
     _request_public_asset,
@@ -24,6 +25,21 @@ from build_public_site import (
 
 
 class PublicSiteBuildTests(unittest.TestCase):
+    def test_public_description_removes_only_matching_display_cue_suffix(self):
+        function = {
+            "description": {
+                "text": "Sleep deliberately; activation cue PLUS-SLEEP.",
+            },
+            "commands": [
+                {"display_cue": {"text": "PLUS-SLEEP"}},
+            ],
+        }
+        original = copy.deepcopy(function)
+        self.assertEqual(_public_description(function), "Sleep deliberately")
+        function["description"]["text"] = "Use PLUS-SLEEP safely."
+        self.assertEqual(_public_description(function), "Use PLUS-SLEEP safely.")
+        self.assertEqual(original["description"]["text"], "Sleep deliberately; activation cue PLUS-SLEEP.")
+
     @staticmethod
     def valid_pin():
         return {

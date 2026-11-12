@@ -56,3 +56,20 @@ jobs:
           python -m ocf_tools.public_site_export --source-commit "${{ steps.source.outputs.commit }}" --output public-guide-export.json
           python scripts/build_public_site.py --site-root site --content-dir docs/website --source-pin site/source.json --guide-export public-guide-export.json --catalog verified-catalog.json --output verified-site
           python scripts/validate_site.py verified-site
+      - name: Install pinned browser test dependencies
+        if: matrix.os == 'ubuntu-latest' && matrix.python == '3.12'
+        run: npm ci
+      - name: Install Chromium for browser/accessibility gate
+        if: matrix.os == 'ubuntu-latest' && matrix.python == '3.12'
+        run: npx playwright install --with-deps chromium
+      - name: Test the generated site in Chromium and axe-core
+        if: matrix.os == 'ubuntu-latest' && matrix.python == '3.12'
+        run: npm run test:browser
+      - name: Retain public-safe browser acceptance evidence
+        if: always() && matrix.os == 'ubuntu-latest' && matrix.python == '3.12'
+        uses: actions/upload-artifact@v4
+        with:
+          name: browser-acceptance
+          path: browser-artifacts/
+          if-no-files-found: ignore
+          retention-days: 30
