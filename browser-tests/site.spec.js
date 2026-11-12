@@ -25,6 +25,11 @@ test('all 58 generated function pages expose spoken cues only and pass axe', asy
     await page.goto(`/functions/${id}/`);
     await expect(page.locator('h1')).toBeVisible();
     await expect(page.locator('.display-cue, .historical-commands, .historical-cue')).toHaveCount(0);
+    await expect(page.locator('.draft-badge, .review-status, .status-line')).toHaveCount(0);
+    const pageText = await page.locator('body').innerText();
+    expect(pageText).not.toContain('Draft metadata — not reviewed guidance');
+    expect(pageText).not.toContain('description review status not recorded');
+    expect(pageText).not.toContain('Procedure wording is not published while review is pending.');
     const blocks = page.locator('.command-block');
     for (const block of await blocks.all()) {
       const cue = block.locator('.spoken-cue strong');
@@ -37,6 +42,8 @@ test('all 58 generated function pages expose spoken cues only and pass axe', asy
     expect(new Set(row.cues).size).toBe(row.cues.length);
     await noAxeViolations(page);
   }
+  const intuition = index.functions.find(row => row.function_id === 'OCF-EXP-006');
+  expect(intuition.search_terms).toEqual([]);
 });
 
 test('Sleep has no duplicate step or generic command filler, while distinct guidance remains', async ({ page }) => {
@@ -234,7 +241,7 @@ test('Quick Reference filters, keyboard controls, narrow widths, print, themes, 
 
   await page.setViewportSize({ width: 375, height: 900 });
   await page.goto('/quick-reference/');
-  const search = page.getByLabel('Search title, ID, spoken cue, tag or use');
+  const search = page.getByLabel('Search title, ID, spoken cue or description');
   await search.focus();
   await page.keyboard.type('OCF-EXP-001');
   await expect(page.locator('[data-reference-count]')).toHaveText('1 function');

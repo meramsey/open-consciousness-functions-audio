@@ -702,7 +702,9 @@ def build_public_site(
                         if command.get("spoken_cue")
                     ],
                     "search_terms": [
-                        item["text"] for item in row["tags"] + row["common_uses"]
+                        item["text"]
+                        for item in row["tags"] + row["common_uses"]
+                        if item["status"] != "draft"
                     ],
                     "audio_available": bool(
                         sessions_by_function.get(row["function_id"])
@@ -981,7 +983,9 @@ def _functions_index(functions, sessions_by_function):
             if command.get("spoken_cue")
         )
         search.extend(
-            item["text"] for item in function["tags"] + function["common_uses"]
+            item["text"]
+            for item in function["tags"] + function["common_uses"]
+            if item["status"] != "draft"
         )
         sessions = sessions_by_function.get(function["function_id"], [])
         function_languages = sorted(
@@ -998,7 +1002,7 @@ def _functions_index(functions, sessions_by_function):
         for category in _unique_categories(functions)
         if cards_by_domain.get(category["id"])
     )
-    return f"""<header class="page-intro"><p class="eyebrow">Canonical documentation directory</p><h1>All 58 OCF functions</h1><p>Documentation is listed independently from audio availability. Functions are grouped by their canonical primary domain; secondary domains remain available in filters and on each guide.</p></header><form class="directory-filters" role="search"><label for="function-search">Search title, ID, cues, tags or common uses</label><input id="function-search" type="search" data-function-search placeholder="Try a title, cue, tag or function ID"><label for="category-filter">Canonical domain</label><select id="category-filter" data-category-filter><option value="">All domains</option>{options}</select><label for="audio-filter">Audio availability</label><select id="audio-filter" data-audio-filter><option value="">All documentation</option><option value="yes">Published audio available</option><option value="no">Documentation only</option></select><label for="language-filter">Audio language</label><select id="language-filter" data-directory-language><option value="">All languages</option>{language_options}</select><label for="voice-filter">Audio voice</label><select id="voice-filter" data-directory-voice><option value="">All voices</option>{voice_options}</select><output data-directory-count aria-live="polite">58 functions</output></form>{groups}<noscript><p>Search and filters require JavaScript. Every function remains listed below.</p></noscript>"""
+    return f"""<header class="page-intro"><p class="eyebrow">Canonical documentation directory</p><h1>All 58 OCF functions</h1><p>Documentation is listed independently from audio availability. Functions are grouped by their canonical primary domain; secondary domains remain available in filters and on each guide.</p></header><form class="directory-filters" role="search"><label for="function-search">Search title, ID, description or spoken cue</label><input id="function-search" type="search" data-function-search placeholder="Try a title, spoken cue or function ID"><label for="category-filter">Canonical domain</label><select id="category-filter" data-category-filter><option value="">All domains</option>{options}</select><label for="audio-filter">Audio availability</label><select id="audio-filter" data-audio-filter><option value="">All documentation</option><option value="yes">Published audio available</option><option value="no">Documentation only</option></select><label for="language-filter">Audio language</label><select id="language-filter" data-directory-language><option value="">All languages</option>{language_options}</select><label for="voice-filter">Audio voice</label><select id="voice-filter" data-directory-voice><option value="">All voices</option>{voice_options}</select><output data-directory-count aria-live="polite">58 functions</output></form>{groups}<noscript><p>Search and filters require JavaScript. Every function remains listed below.</p></noscript>"""
 
 
 def _unique_categories(functions):
@@ -1122,7 +1126,7 @@ def _function_page(function, sessions, transcript_paths, source_commit):
         if command["procedure_status"] == "documented":
             procedure_html = f"<ol>{steps}</ol>"
         elif command["procedure_status"] == "review-pending":
-            procedure_html = '<p class="not-specified">Procedure wording is not published while review is pending.</p>'
+            procedure_html = '<p class="not-specified">No activation steps are published for this command.</p>'
         else:
             procedure_html = '<p class="not-specified">No activation steps are specified. Do not infer a procedure from the cue name.</p>'
         usage_html = (
@@ -1160,14 +1164,9 @@ def _function_page(function, sessions, transcript_paths, source_commit):
         description = (
             ": " + _html(scope["description"]) if scope.get("description") else ""
         )
-        review = (
-            " <span class=review-status>(description review status not recorded)</span>"
-            if scope["description_status"] == "unspecified"
-            else ""
-        )
         scope_rows.append(
             f"<li><strong>{_html(scope['label'])}</strong> — "
-            f"{_html(scope['persistence'])}{description}{review}</li>"
+            f"{_html(scope['persistence'])}{description}</li>"
         )
     scopes_html = (
         "<ul>" + "".join(scope_rows) + "</ul>"
@@ -1226,17 +1225,15 @@ def _function_page(function, sessions, transcript_paths, source_commit):
     breadcrumb = f'<nav class="breadcrumbs" aria-label="Breadcrumb"><a href="../../">Home</a> / <a href="../">Functions</a> / {_html(function["title"]["text"])}</nav>'
     return (
         breadcrumb
-        + f'''<header class="page-intro" data-function-id="{_html(function["function_id"])}"><p class="eyebrow">{_html(function["function_id"])} · {_html(categories)}</p><h1>{_html(function["title"]["text"])}</h1><p class="lead">{_html(_public_description(function))}</p><p class="status-line">Title: {_html(function["title"]["status"])} · Description: {_html(function["description"]["status"])}</p></header><section class="guide-section"><h2 id="overview">Intended purpose</h2><p>{_html(_public_description(function))}</p>{terms}<p class="source-link">Canonical function source: <a href="{SOURCE_REPOSITORY}/tree/{source_commit}/{_html(function["canonical_resource"])}">this locale resource at pinned commit {source_commit[:12]}</a>.</p></section><section class="guide-section"><h2 id="cues">Cues and documented instructions</h2>{"".join(command_sections)}</section>{lifecycle_html}{safety}<section class="guide-section"><h2 id="listening">Published audio editions</h2><p>Audio availability, voice and transcript are edition-specific. Only release-manifest assets are listed here.</p>{session_html}</section><section class="guide-section"><h2 id="related">Approved related functions</h2><ul class="relationship-list">{related_html}</ul><p>These links are optional and directional. They are not prerequisites or claims of combined effect.</p></section>'''
+        + f'''<header class="page-intro" data-function-id="{_html(function["function_id"])}"><p class="eyebrow">{_html(function["function_id"])} · {_html(categories)}</p><h1>{_html(function["title"]["text"])}</h1><p class="lead">{_html(_public_description(function))}</p></header><section class="guide-section"><h2 id="overview">Intended purpose</h2><p>{_html(_public_description(function))}</p>{terms}<p class="source-link">Canonical function source: <a href="{SOURCE_REPOSITORY}/tree/{source_commit}/{_html(function["canonical_resource"])}">this locale resource at pinned commit {source_commit[:12]}</a>.</p></section><section class="guide-section"><h2 id="cues">Cues and documented instructions</h2>{"".join(command_sections)}</section>{lifecycle_html}{safety}<section class="guide-section"><h2 id="listening">Published audio editions</h2><p>Audio availability, voice and transcript are edition-specific. Only release-manifest assets are listed here.</p>{session_html}</section><section class="guide-section"><h2 id="related">Approved related functions</h2><ul class="relationship-list">{related_html}</ul><p>These links are optional and directional. They are not prerequisites or claims of combined effect.</p></section>'''
     )
 
 
 def _discovery_section(title, values):
+    values = [value for value in values if value["status"] != "draft"]
     if not values:
         return ""
-    rows = "".join(
-        f"<li>{_html(value['text'])}{' <span class=draft-badge>Draft metadata — not reviewed guidance</span>' if value['status'] == 'draft' else ''}</li>"
-        for value in values
-    )
+    rows = "".join(f"<li>{_html(value['text'])}</li>" for value in values)
     return f'<details class="discovery-details"><summary>{_html(title)}</summary><ul>{rows}</ul></details>'
 
 
@@ -1393,7 +1390,9 @@ def _quick_reference(functions, sessions_by_function):
             _public_description(function),
         ]
         searchable.extend(
-            term["text"] for term in function["tags"] + function["common_uses"]
+            term["text"]
+            for term in function["tags"] + function["common_uses"]
+            if term["status"] != "draft"
         )
         for command in function["commands"]:
             spoken = command.get("spoken_cue")
@@ -1413,7 +1412,7 @@ def _quick_reference(functions, sessions_by_function):
         f'<option value="{_html(item["id"])}">{_html(item["label"])}</option>'
         for item in _unique_categories(functions)
     )
-    return f"""<header class="page-intro"><p class="eyebrow">Approved spoken cues</p><h1>Quick Reference</h1><p>Find a spoken cue; use the function's documented steps rather than inferring a procedure from its name.</p></header><div class="reference-tools"><label for="reference-search">Search title, ID, spoken cue, tag or use</label><input id="reference-search" type="search" data-reference-search><label for="reference-category">Canonical domain</label><select id="reference-category" data-reference-category><option value="">All domains</option>{options}</select><output data-reference-count aria-live="polite">58 functions</output></div><div class="table-scroll"><table class="reference-table"><thead><tr><th scope="col">Function</th><th scope="col">Current spoken cues</th><th scope="col">Description</th><th scope="col">Audio availability</th></tr></thead><tbody>{"".join(rows)}</tbody></table></div>"""
+    return f"""<header class="page-intro"><p class="eyebrow">Approved spoken cues</p><h1>Quick Reference</h1><p>Find a spoken cue; use the function's documented steps rather than inferring a procedure from its name.</p></header><div class="reference-tools"><label for="reference-search">Search title, ID, spoken cue or description</label><input id="reference-search" type="search" data-reference-search><label for="reference-category">Canonical domain</label><select id="reference-category" data-reference-category><option value="">All domains</option>{options}</select><output data-reference-count aria-live="polite">58 functions</output></div><div class="table-scroll"><table class="reference-table"><thead><tr><th scope="col">Function</th><th scope="col">Current spoken cues</th><th scope="col">Description</th><th scope="col">Audio availability</th></tr></thead><tbody>{"".join(rows)}</tbody></table></div>"""
 
 
 def _historical_names_page(rows, source_commit, *, historical_reference_sha256):

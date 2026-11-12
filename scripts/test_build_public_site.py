@@ -13,6 +13,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from build_public_site import (
     _asset_specification,
     _catalog_sessions,
+    _discovery_section,
+    _function_page,
     _inline,
     _historical_lookup_rows,
     _public_description,
@@ -67,6 +69,50 @@ class PublicSiteBuildTests(unittest.TestCase):
         unknown_target = reference.replace("OCF-SEN-003", "OCF-SEN-004")
         with self.assertRaisesRegex(ValueError, "unknown function"):
             _historical_lookup_rows(unknown_target, [function])
+
+    def test_draft_discovery_and_pending_procedure_are_hidden_without_mutating_metadata(self):
+        function = {
+            "function_id": "OCF-EXP-006",
+            "title": {"text": "Intuition", "status": "reviewed"},
+            "description": {"text": "A documented purpose.", "status": "reviewed"},
+            "categories": [],
+            "tags": [{"text": "draft-tag", "status": "draft"}],
+            "common_uses": [{"text": "draft-use", "status": "draft"}],
+            "commands": [{
+                "command_id": "OCF-CMD-EXP-006-PRIMARY",
+                "designation": "primary",
+                "spoken_cue": "Plus Intuition",
+                "procedure_status": "review-pending",
+                "procedure_steps": [
+                    {"operation": "draft-only", "instruction": "Unapproved steps stay hidden."}
+                ],
+                "usage": None,
+                "explanation": None,
+                "effect_scope": None,
+            }],
+            "lifecycle": {
+                "scopes": [],
+                "activation": "manual",
+                "persistence": "temporary",
+                "trigger_conditions": [],
+                "release_command": None,
+            },
+            "safety_notes": [],
+            "related_functions": [],
+            "canonical_resource": "locales/en-US/OCF-EXP-006-Intuition.yaml",
+        }
+        original = copy.deepcopy(function)
+        html = _function_page(function, [], {}, "a" * 40)
+        self.assertEqual(_discovery_section("Tags", function["tags"]), "")
+        self.assertNotIn("Draft metadata", html)
+        self.assertNotIn("draft-tag", html)
+        self.assertNotIn("draft-use", html)
+        self.assertNotIn("Unapproved steps stay hidden.", html)
+        self.assertIn("No activation steps are published for this command.", html)
+        self.assertNotIn("review-pending", html)
+        self.assertNotIn("Title: reviewed", html)
+        self.assertNotIn("Description: reviewed", html)
+        self.assertEqual(function, original)
 
     def test_spoken_cue_reference_replaces_only_the_approved_whole_cue(self):
         commands = [
@@ -324,6 +370,14 @@ class PublicSiteBuildTests(unittest.TestCase):
         tampered["functions"][0]["title"] = "unauthenticated text"
         with self.assertRaisesRegex(ValueError, "functions hash mismatch"):
             validate_guide_export(tampered, pin)
+        for field, message in (
+            ("draft_procedures_included", "draft procedure text is forbidden"),
+            ("relationship_proposals_included", "draft relationship proposals are forbidden"),
+        ):
+            tampered = copy.deepcopy(document)
+            tampered["build_receipt"][field] = True
+            with self.subTest(field=field), self.assertRaisesRegex(ValueError, message):
+                validate_guide_export(tampered, pin)
 
     def test_release_catalog_companion_join_uses_manifest_master_hash(self):
         release = {
