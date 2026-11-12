@@ -10,6 +10,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from build_public_site import (
     _catalog_sessions,
     _inline,
+    _quick_reference,
     digest,
     fetch_transcript,
     validate_guide_export,
@@ -91,6 +92,23 @@ class PublicSiteBuildTests(unittest.TestCase):
     def test_transcript_rejects_unmanifested_format(self):
         with self.assertRaisesRegex(ValueError, "only published TXT/VTT"):
             fetch_transcript({"format": "wav"}, fetcher=lambda _: b"")
+
+    def test_quick_reference_marks_audio_unavailable_separately(self):
+        function = {
+            "function_id": "OCF-FND-001",
+            "title": {"text": "Example"},
+            "description": {"text": "Documented purpose."},
+            "categories": [{"id": "foundation", "label": "Foundation"}],
+            "primary_category": "foundation",
+            "tags": [],
+            "common_uses": [],
+            "commands": [],
+            "historical_commands": [],
+        }
+        unavailable = _quick_reference([function], {})
+        available = _quick_reference([function], {"OCF-FND-001": [object()]})
+        self.assertIn("Audio unavailable", unavailable)
+        self.assertIn("Published audio available", available)
 
     def test_guide_export_fails_closed_on_source_pin_or_receipt_drift(self):
         pin = self.valid_pin()

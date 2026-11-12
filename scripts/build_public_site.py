@@ -569,7 +569,7 @@ def build_public_site(
                 ),
             )
 
-        quick_body = _quick_reference(functions)
+        quick_body = _quick_reference(functions, sessions_by_function)
         _write(
             staging / "quick-reference" / "index.html",
             _shell(
@@ -1078,7 +1078,7 @@ def _session_card(row, transcript_paths, *, site_root_prefix="../../"):
     return f'''<article class="edition-card"><div class="edition-heading">{artwork}<div><h3>{_html(title)}</h3><p>{_html(session["locale"])} · {_html(session["voice_name"])} · edition {_html(session["edition"])}</p><p>Published release <a href="{_html(release["release_url"])}">{_html(release["tag"])}</a> · source audio commit {_html(release["source_ocf_commit"][:12])}</p></div></div>{"".join(audio)}{"".join(transcript_controls)}{f"<details><summary>Other companion files</summary><ul>{"".join(companion_links)}</ul></details>" if companion_links else ""}</article>'''
 
 
-def _quick_reference(functions):
+def _quick_reference(functions, sessions_by_function):
     rows = []
     for function in functions:
         cue_rows = []
@@ -1105,13 +1105,13 @@ def _quick_reference(functions):
             searchable.append(command["display_cue"]["text"])
         category = function["primary_category"]
         rows.append(
-            f'<tr data-reference-row data-search="{_html(" ".join(searchable).casefold())}" data-category="{_html(category)}"><th scope="row"><a href="../functions/{_html(function["function_id"])}/">{_html(function["title"]["text"])}</a><span class="stable-id">{_html(function["function_id"])}</span><span class="category-chip">{_html(category)}</span></th><td><ul>{"".join(cue_rows)}</ul></td><td>{_html(function["description"]["text"])}</td></tr>'
+            f'<tr data-reference-row data-search="{_html(" ".join(searchable).casefold())}" data-category="{_html(category)}"><th scope="row"><a href="../functions/{_html(function["function_id"])}/">{_html(function["title"]["text"])}</a><span class="stable-id">{_html(function["function_id"])}</span><span class="category-chip">{_html(category)}</span></th><td><ul>{"".join(cue_rows)}</ul></td><td>{_html(function["description"]["text"])}</td><td>{"Published audio available" if sessions_by_function.get(function["function_id"]) else "Audio unavailable"}</td></tr>'
         )
     options = "".join(
         f'<option value="{_html(item["id"])}">{_html(item["label"])}</option>'
         for item in _unique_categories(functions)
     )
-    return f"""<header class="page-intro"><p class="eyebrow">Find exact canonical cues</p><h1>Quick Reference</h1><p>Display and spoken cues are distinct. A cue identifies a command; use the function's documented steps rather than inferring a procedure from its name.</p></header><div class="reference-tools"><label for="reference-search">Search title, ID, cue, tag or use</label><input id="reference-search" type="search" data-reference-search><label for="reference-category">Canonical domain</label><select id="reference-category" data-reference-category><option value="">All domains</option>{options}</select><output data-reference-count aria-live="polite">58 functions</output></div><div class="table-scroll"><table class="reference-table"><thead><tr><th scope="col">Function</th><th scope="col">Current cues</th><th scope="col">Description</th></tr></thead><tbody>{"".join(rows)}</tbody></table></div>"""
+    return f"""<header class="page-intro"><p class="eyebrow">Find exact canonical cues</p><h1>Quick Reference</h1><p>Display and spoken cues are distinct. A cue identifies a command; use the function's documented steps rather than inferring a procedure from its name.</p></header><div class="reference-tools"><label for="reference-search">Search title, ID, cue, tag or use</label><input id="reference-search" type="search" data-reference-search><label for="reference-category">Canonical domain</label><select id="reference-category" data-reference-category><option value="">All domains</option>{options}</select><output data-reference-count aria-live="polite">58 functions</output></div><div class="table-scroll"><table class="reference-table"><thead><tr><th scope="col">Function</th><th scope="col">Current and historical cues</th><th scope="col">Description</th><th scope="col">Audio availability</th></tr></thead><tbody>{"".join(rows)}</tbody></table></div>"""
 
 
 def _relationships_page(functions):
