@@ -628,6 +628,7 @@ def build_public_site(
                     "function_id": row["function_id"],
                     "title": row["title"]["text"],
                     "description": row["description"]["text"],
+                    "primary_category": row["primary_category"],
                     "categories": [category["id"] for category in row["categories"]],
                     "cues": [
                         cue
@@ -895,7 +896,7 @@ def _functions_index(functions, sessions_by_function):
     voice_options = "".join(
         f'<option value="{_html(value)}">{_html(value)}</option>' for value in voices
     )
-    cards = []
+    cards_by_domain = {}
     for function in functions:
         categories = {item["id"] for item in function["categories"]}
         search = [
@@ -926,10 +927,15 @@ def _functions_index(functions, sessions_by_function):
         function_voices = sorted(
             {row["session"].get("voice_name", "") for row in sessions}
         )
-        cards.append(
+        cards_by_domain.setdefault(function["primary_category"], []).append(
             f'''<article class="function-card" data-function-card data-category="{_html(" ".join(sorted(categories)))}" data-audio="{"yes" if sessions else "no"}" data-language="{_html("|".join(function_languages))}" data-voice="{_html("|".join(function_voices))}" data-search="{_html(" ".join(search).casefold())}"><p class="eyebrow">{_html(function["primary_category"])} · {function["function_id"]}</p><h2><a href="{_html(function["function_id"])}/">{_html(function["title"]["text"])}</a></h2><p>{_html(function["description"]["text"])}</p><p class="function-status">Documentation available · {"Published audio available" if sessions else "No published audio in current catalog"}</p><a class="text-link" href="{_html(function["function_id"])}/">Read documented instructions <span aria-hidden="true">→</span></a></article>'''
         )
-    return f"""<header class="page-intro"><p class="eyebrow">Canonical documentation directory</p><h1>All 58 OCF functions</h1><p>Documentation is listed independently from audio availability. Categories retain their canonical domain IDs; optional related links are only shown when explicitly approved.</p></header><form class="directory-filters" role="search"><label for="function-search">Search title, ID, cues, tags or common uses</label><input id="function-search" type="search" data-function-search placeholder="Try a title, cue, tag or function ID"><label for="category-filter">Canonical domain</label><select id="category-filter" data-category-filter><option value="">All domains</option>{options}</select><label for="audio-filter">Audio availability</label><select id="audio-filter" data-audio-filter><option value="">All documentation</option><option value="yes">Published audio available</option><option value="no">Documentation only</option></select><label for="language-filter">Audio language</label><select id="language-filter" data-directory-language><option value="">All languages</option>{language_options}</select><label for="voice-filter">Audio voice</label><select id="voice-filter" data-directory-voice><option value="">All voices</option>{voice_options}</select><output data-directory-count aria-live="polite">58 functions</output></form><div class="function-grid" data-function-grid>{"".join(cards)}</div><noscript><p>Search and filters require JavaScript. Every function remains listed below.</p></noscript>"""
+    groups = "".join(
+        f'<section class="domain-group" data-domain-group="{_html(category["id"])}"><h2>{_html(category["label"])}</h2><div class="function-grid" data-function-grid>{"".join(cards_by_domain.get(category["id"], []))}</div></section>'
+        for category in _unique_categories(functions)
+        if cards_by_domain.get(category["id"])
+    )
+    return f"""<header class="page-intro"><p class="eyebrow">Canonical documentation directory</p><h1>All 58 OCF functions</h1><p>Documentation is listed independently from audio availability. Functions are grouped by their canonical primary domain; secondary domains remain available in filters and on each guide.</p></header><form class="directory-filters" role="search"><label for="function-search">Search title, ID, cues, tags or common uses</label><input id="function-search" type="search" data-function-search placeholder="Try a title, cue, tag or function ID"><label for="category-filter">Canonical domain</label><select id="category-filter" data-category-filter><option value="">All domains</option>{options}</select><label for="audio-filter">Audio availability</label><select id="audio-filter" data-audio-filter><option value="">All documentation</option><option value="yes">Published audio available</option><option value="no">Documentation only</option></select><label for="language-filter">Audio language</label><select id="language-filter" data-directory-language><option value="">All languages</option>{language_options}</select><label for="voice-filter">Audio voice</label><select id="voice-filter" data-directory-voice><option value="">All voices</option>{voice_options}</select><output data-directory-count aria-live="polite">58 functions</output></form>{groups}<noscript><p>Search and filters require JavaScript. Every function remains listed below.</p></noscript>"""
 
 
 def _unique_categories(functions):

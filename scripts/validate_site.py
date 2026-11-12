@@ -40,6 +40,7 @@ class SiteLinks(HTMLParser):
         self.refs = []
         self.text = []
         self.function_ids = set()
+        self.domain_groups = set()
 
     def handle_starttag(self, tag, attrs):
         attrs = dict(attrs)
@@ -47,6 +48,8 @@ class SiteLinks(HTMLParser):
             self.ids.add(attrs["id"])
         if attrs.get("data-function-id"):
             self.function_ids.add(attrs["data-function-id"])
+        if attrs.get("data-domain-group"):
+            self.domain_groups.add(attrs["data-domain-group"])
         for key in ("href", "src"):
             if attrs.get(key):
                 self.refs.append((key, attrs[key]))
@@ -410,6 +413,12 @@ def _validate_documentation_site(site_root: Path):
             identity in parser.function_ids,
             f"function guide identity mismatch: {identity}",
         )
+    primary_domains = {row.get("primary_category") for row in functions}
+    directory = parsed_pages[(site_root / "functions" / "index.html").resolve()]
+    require(
+        None not in primary_domains and directory.domain_groups == primary_domains,
+        "function directory does not group every primary canonical domain",
+    )
     inventory = {
         path.relative_to(site_root).as_posix(): hashlib.sha256(
             path.read_bytes()

@@ -71,6 +71,8 @@ body { min-width: 320px; }
 .home-paths h2 { font: 600 clamp(1.8rem, 3.5vw, 2.7rem)/1.15 var(--display); }
 .path-grid, .function-grid, .relationship-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 1rem; margin-top: 1.5rem; }
 .path-card, .function-card, .relationship-card { display: block; padding: 1.25rem; background: var(--card); border: 1px solid var(--line); border-radius: .45rem; text-decoration: none; }
+.domain-group { max-width: 1100px; margin: 2.5rem auto; }
+.domain-group > h2 { margin-bottom: .8rem; font: 600 1.55rem/1.2 var(--display); }
 .path-card:hover, .function-card:hover { border-color: var(--muted); }
 .path-card > span { color: var(--muted); font: .75rem var(--mono); }
 .path-card h3, .function-card h2 { margin: .7rem 0 .5rem; font: 650 1.3rem/1.25 var(--display); }

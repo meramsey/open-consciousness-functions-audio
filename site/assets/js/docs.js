@@ -64,6 +64,7 @@
   const voiceFilter = document.querySelector('[data-directory-voice]');
   const directoryCount = document.querySelector('[data-directory-count]');
   const functionCards = [...document.querySelectorAll('[data-function-card]')];
+  const domainGroups = [...document.querySelectorAll('[data-domain-group]')];
   const updateDirectory = () => {
     if (!directorySearch) return;
     let shown = 0;
@@ -71,6 +72,9 @@
       const visible = matches(card, directorySearch.value, categoryFilter?.value || '', audioFilter?.value || '', languageFilter?.value || '', voiceFilter?.value || '');
       card.hidden = !visible;
       if (visible) shown += 1;
+    }
+    for (const group of domainGroups) {
+      group.hidden = !group.querySelector('[data-function-card]:not([hidden])');
     }
     if (directoryCount) directoryCount.textContent = `${shown} ${shown === 1 ? 'function' : 'functions'}`;
   };
