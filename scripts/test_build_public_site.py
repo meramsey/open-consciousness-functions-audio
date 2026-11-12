@@ -11,6 +11,7 @@ from build_public_site import (
     _catalog_sessions,
     _inline,
     _quick_reference,
+    _recommended_settings,
     digest,
     fetch_transcript,
     validate_guide_export,
@@ -109,6 +110,11 @@ class PublicSiteBuildTests(unittest.TestCase):
         available = _quick_reference([function], {"OCF-FND-001": [object()]})
         self.assertIn("Audio unavailable", unavailable)
         self.assertIn("Published audio available", available)
+
+    def test_recommended_settings_include_loudness_and_speed_controls(self):
+        content = _recommended_settings("a" * 40)
+        self.assertIn("automatic loudness normalization", content)
+        self.assertIn("normal playback speed (1.0x)", content)
 
     def test_guide_export_fails_closed_on_source_pin_or_receipt_drift(self):
         pin = self.valid_pin()
