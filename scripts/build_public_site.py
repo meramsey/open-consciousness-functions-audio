@@ -798,6 +798,7 @@ def _shell(
         else ""
     )
     docs_script = f'<script src="{base}assets/js/docs.js" defer></script>'
+    content_class = "docs-content home-content" if root else "docs-content"
     return f'''<!doctype html>
 <html lang="en-US"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="theme-color" content="#101a22"><meta name="description" content="Open Consciousness Functions documentation and published audio library.">
@@ -807,7 +808,7 @@ def _shell(
 <header class="site-header docs-header"><a class="brand" href="{logo_href}" aria-label="Open Consciousness Functions home"><span class="brand-mark" aria-hidden="true">OCF</span><span class="brand-name">Open Consciousness Functions<small>Audio and Guides</small></span></a>
 <nav class="desktop-nav" aria-label="Main navigation">{links}</nav><details class="mobile-nav"><summary>Menu</summary><nav aria-label="Mobile navigation">{links}</nav></details>
 <button class="theme-toggle" type="button" data-theme-toggle aria-label="Toggle light or dark theme" aria-pressed="false">Theme</button></header>
-<main id="main" class="docs-main">{toc_mobile}<div class="docs-layout{" with-toc" if toc_nav else ""}">{toc_desktop}<article class="docs-content">{body}</article></div></main>
+<main id="main" class="docs-main">{toc_mobile}<div class="docs-layout{" with-toc" if toc_nav else ""}">{toc_desktop}<article class="{content_class}">{body}</article></div></main>
 <footer class="site-footer"><a class="footer-brand" href="{logo_href}">OCF<span> / AUDIO &amp; GUIDES</span></a><div class="footer-links"><a href="{SITE_REPOSITORY}">Audio site source</a><a href="{SOURCE_REPOSITORY}/tree/{source_commit}">Canonical OCF source at {source_commit[:12]}</a><a href="https://github.com/ocfproject-org/open-consciousness-functions-audio/releases">Published releases</a></div><p>Independent and open source. Not affiliated with The Monroe Institute or Hemi-Sync. Guides do not establish effects, listening approval, or release authorization.</p></footer>
 </body></html>'''
 
