@@ -9,8 +9,10 @@ import json
 import re
 import shutil
 import tempfile
+import time
 import urllib.request
 from pathlib import Path
+from urllib.error import HTTPError
 from urllib.parse import urlsplit
 
 from catalog import validate_catalog
@@ -30,6 +32,8 @@ FORBIDDEN_PUBLIC_KEYS = {
     "sources",
 }
 MAX_TRANSCRIPT_BYTES = 2 * 1024 * 1024
+TRANSIENT_HTTP_STATUS = {429, 500, 502, 503, 504}
+TRANSCRIPT_FETCH_ATTEMPTS = 3
 
 
 def digest(value):
@@ -211,16 +215,32 @@ def _request_public_asset(asset):
     request = urllib.request.Request(
         url, headers={"User-Agent": "OCF-public-site-build/1"}
     )
-    with urllib.request.urlopen(request, timeout=45) as response:
-        final = urlsplit(response.geturl())
-        _require(
-            final.scheme == "https"
-            and final.hostname
-            in {"github.com", "release-assets.githubusercontent.com"},
-            "companion download redirected outside GitHub release hosting",
-        )
-        body = response.read(MAX_TRANSCRIPT_BYTES + 1)
-    return body
+    for attempt in range(TRANSCRIPT_FETCH_ATTEMPTS):
+        try:
+            with urllib.request.urlopen(request, timeout=45) as response:
+                final = urlsplit(response.geturl())
+                _require(
+                    final.scheme == "https"
+                    and final.hostname
+                    in {"github.com", "release-assets.githubusercontent.com"},
+                    "companion download redirected outside GitHub release hosting",
+                )
+                return response.read(MAX_TRANSCRIPT_BYTES + 1)
+        except HTTPError as exc:
+            if (
+                exc.code not in TRANSIENT_HTTP_STATUS
+                or attempt + 1 == TRANSCRIPT_FETCH_ATTEMPTS
+            ):
+                exc.close()
+                raise
+            retry_after = exc.headers.get("Retry-After") if exc.headers else None
+            try:
+                server_delay = float(retry_after) if retry_after else 0.0
+            except ValueError:
+                server_delay = 0.0
+            exc.close()
+            time.sleep(min(5.0, max(0.25 * (2**attempt), server_delay)))
+    raise AssertionError("bounded transcript retry loop exited unexpectedly")
 
 
 def fetch_transcript(asset, *, fetcher=None):

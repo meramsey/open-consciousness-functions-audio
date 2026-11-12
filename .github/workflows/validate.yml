@@ -47,6 +47,7 @@ jobs:
       - name: Test documentation search and transcript URL safety
         run: node scripts/test_docs.js
       - name: Build the complete pinned website and verify published sidecars
+        if: matrix.os == 'ubuntu-latest' && matrix.python == '3.12'
         env:
           GH_TOKEN: ${{ github.token }}
           PYTHONPATH: ocf-source/scripts

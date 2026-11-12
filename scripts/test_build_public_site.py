@@ -2,9 +2,12 @@
 
 import copy
 import hashlib
+import io
 import sys
 import unittest
 from pathlib import Path
+from unittest.mock import patch
+from urllib.error import HTTPError
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from build_public_site import (
@@ -13,6 +16,7 @@ from build_public_site import (
     _inline,
     _quick_reference,
     _recommended_settings,
+    _request_public_asset,
     digest,
     fetch_transcript,
     validate_guide_export,
@@ -95,6 +99,38 @@ class PublicSiteBuildTests(unittest.TestCase):
     def test_transcript_rejects_unmanifested_format(self):
         with self.assertRaisesRegex(ValueError, "only published TXT/VTT"):
             fetch_transcript({"format": "wav"}, fetcher=lambda _: b"")
+
+    def test_public_asset_fetch_retries_transient_502_with_a_fixed_bound(self):
+        url = "https://github.com/ocfproject-org/open-consciousness-functions-audio/releases/download/tag/transcript.txt"
+        payload = b"approved public release companion"
+
+        class Response(io.BytesIO):
+            def geturl(self):
+                return "https://release-assets.githubusercontent.com/transcript.txt"
+
+        transient = HTTPError(url, 502, "proxy unavailable", {}, io.BytesIO())
+        with (
+            patch(
+                "build_public_site.urllib.request.urlopen",
+                side_effect=[transient, Response(payload)],
+            ) as opener,
+            patch("build_public_site.time.sleep") as pause,
+        ):
+            self.assertEqual(_request_public_asset({"download_url": url}), payload)
+        self.assertEqual(opener.call_count, 2)
+        pause.assert_called_once_with(0.25)
+
+    def test_public_asset_fetch_does_not_retry_permanent_http_errors(self):
+        url = "https://github.com/ocfproject-org/open-consciousness-functions-audio/releases/download/tag/transcript.txt"
+        permanent = HTTPError(url, 404, "missing", {}, io.BytesIO())
+        with (
+            patch(
+                "build_public_site.urllib.request.urlopen", side_effect=permanent
+            ) as opener,
+            self.assertRaises(HTTPError),
+        ):
+            _request_public_asset({"download_url": url})
+        self.assertEqual(opener.call_count, 1)
 
     def test_quick_reference_marks_audio_unavailable_separately(self):
         function = {
