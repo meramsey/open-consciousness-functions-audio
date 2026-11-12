@@ -1,1 +1,1 @@
-{"schema_version":1,"entries":[]}
+{"entries":[{"attestation_sha256":"4cef50c303f286d249014d1028feae37057787a5520fb2de7b9e75b62779d79e","bundle_schema_version":3,"bundle_sha256":"1a27a57c63d35bf4e502c576a337556eda9e77b29d615a264e094874589aff7a","evidence_visibility":"public-commitments","mode":"historical-receipt-v2","release_id":441878809}],"schema_version":1}
