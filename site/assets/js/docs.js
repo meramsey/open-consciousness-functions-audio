@@ -35,18 +35,25 @@
 
   const themeButton = document.querySelector('[data-theme-toggle]');
   if (themeButton) {
+    const systemTheme = window.matchMedia?.('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+    const setTheme = theme => {
+      document.documentElement.dataset.theme = theme;
+      themeButton.setAttribute('aria-pressed', String(theme === 'dark'));
+      themeButton.textContent = theme === 'dark' ? 'Light theme' : 'Dark theme';
+    };
+    let initialTheme = systemTheme;
     try {
       const saved = localStorage.getItem('ocf-theme');
-      if (saved === 'light' || saved === 'dark') document.documentElement.dataset.theme = saved;
+      if (saved === 'light' || saved === 'dark') initialTheme = saved;
+      setTheme(initialTheme);
       themeButton.addEventListener('click', () => {
         const next = document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark';
-        document.documentElement.dataset.theme = next;
+        setTheme(next);
         try { localStorage.setItem('ocf-theme', next); } catch (_) { /* Keep theme toggle usable without storage. */ }
       });
     } catch (_) {
-      themeButton.addEventListener('click', () => {
-        document.documentElement.dataset.theme = document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark';
-      });
+      setTheme(initialTheme);
+      themeButton.addEventListener('click', () => setTheme(document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark'));
     }
   }
 
