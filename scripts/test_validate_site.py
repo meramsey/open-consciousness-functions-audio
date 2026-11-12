@@ -174,6 +174,12 @@ class CatalogValidationTests(unittest.TestCase):
                     page,
                     "../../../outside.html",
                 )
+            with self.assertRaisesRegex(ValueError, "escapes site root"):
+                validate_site._resolve_local_reference(
+                    root,
+                    page,
+                    "..%5c..%5c..%5coutside.html",
+                )
 
 
 if __name__ == "__main__":

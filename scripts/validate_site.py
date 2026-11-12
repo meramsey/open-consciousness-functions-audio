@@ -261,7 +261,7 @@ def _resolve_local_reference(site_root: Path, page: Path, reference: str):
         if url.scheme == "https":
             require(bool(url.netloc), f"invalid external URL: {reference}")
         return None
-    relative = unquote(url.path)
+    relative = unquote(url.path).replace("\\", "/")
     target = page if not relative else (page.parent / relative)
     if target.is_dir() or url.path.endswith("/"):
         target = target / "index.html"

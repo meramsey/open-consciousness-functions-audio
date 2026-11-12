@@ -8,6 +8,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from build_public_site import (
+    _asset_specification,
     _catalog_sessions,
     _inline,
     _quick_reference,
@@ -72,6 +73,7 @@ class PublicSiteBuildTests(unittest.TestCase):
         self.assertNotIn("<script>", rendered)
         self.assertIn("&lt;script&gt;", rendered)
         self.assertNotIn('href="javascript:', rendered)
+        self.assertNotIn('href="..\\..\\outside', rendered)
         self.assertIn('href="https://example.org/a"', rendered)
 
     def test_transcript_requires_manifest_size_digest_and_utf8(self):
@@ -115,6 +117,22 @@ class PublicSiteBuildTests(unittest.TestCase):
         content = _recommended_settings("a" * 40)
         self.assertIn("automatic loudness normalization", content)
         self.assertIn("normal playback speed (1.0x)", content)
+
+    def test_audio_asset_specs_include_format_rate_channels_size_and_duration(self):
+        specification = _asset_specification(
+            {
+                "format": "mp3",
+                "encoding": "MP3 320 kbps",
+                "sample_rate_hz": 44100,
+                "channels": 2,
+                "size_bytes": 1048576,
+                "duration_seconds": 125,
+            }
+        )
+        self.assertEqual(
+            specification,
+            "MP3 · MP3 320 kbps · 44,100 Hz · 2 channels · 1.0 MiB · 2m 5s",
+        )
 
     def test_guide_export_fails_closed_on_source_pin_or_receipt_drift(self):
         pin = self.valid_pin()

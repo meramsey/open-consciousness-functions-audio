@@ -290,12 +290,18 @@ def _inline(markdown):
         label, target = match.group(1), match.group(2)
         parsed = urlsplit(target)
         safe = (
-            (parsed.scheme == "https" and parsed.netloc)
+            (
+                parsed.scheme == "https"
+                and parsed.netloc
+                and not parsed.username
+                and not parsed.password
+            )
             or (
                 not parsed.scheme
                 and not parsed.netloc
                 and not target.startswith("/")
                 and not target.startswith("\\")
+                and "\\" not in target
             )
             or target.startswith("#")
         )
@@ -1113,8 +1119,9 @@ def _session_card(row, transcript_paths, *, site_root_prefix="../../"):
             if asset.get("duration_seconds")
             else "duration not reported"
         )
+        specification_text = _asset_specification(asset, size=size, duration=duration)
         audio.append(
-            f'<p class="asset-download"><a href="{_html(asset["download_url"])}" download>Download {fmt}</a> <span>{_html(size)} · {_html(duration)}</span> <details><summary>Checksum</summary><code>{_html(asset["sha256"])}</code></details></p>'
+            f'<p class="asset-download"><a href="{_html(asset["download_url"])}" download>Download {fmt}</a> <span>{_html(specification_text)}</span> <details><summary>Checksum</summary><code>{_html(asset["sha256"])}</code></details></p>'
         )
     transcript_controls = []
     for fmt, label in (("txt", "Read transcript"), ("vtt", "Download timed subtitles")):
@@ -1147,6 +1154,31 @@ def _session_card(row, transcript_paths, *, site_root_prefix="../../"):
     audio_html = "".join(audio)
     transcript_html = "".join(transcript_controls)
     return f'''<article class="edition-card"><div class="edition-heading">{artwork}<div><h3>{_html(title)}</h3><p>{_html(session["locale"])} · {_html(session["voice_name"])} · edition {_html(session["edition"])}</p><p>Published release <a href="{_html(release["release_url"])}">{_html(release["tag"])}</a> · source audio commit {_html(release["source_ocf_commit"][:12])}</p></div></div>{audio_html}{transcript_html}{companion_html}</article>'''
+
+
+def _asset_specification(asset, *, size=None, duration=None):
+    fmt = str(asset.get("format", "")).upper()
+    specifications = [fmt, asset.get("encoding")]
+    if asset.get("sample_rate_hz"):
+        specifications.append(f"{asset['sample_rate_hz']:,} Hz")
+    if asset.get("channels"):
+        specifications.append(
+            f"{asset['channels']} channel{'s' if asset['channels'] != 1 else ''}"
+        )
+    if size is None:
+        size = (
+            f"{asset['size_bytes'] / 1048576:.1f} MiB"
+            if asset.get("size_bytes")
+            else None
+        )
+    if duration is None:
+        duration = (
+            f"{int(asset['duration_seconds'] // 60)}m {int(asset['duration_seconds'] % 60)}s"
+            if asset.get("duration_seconds")
+            else None
+        )
+    specifications.extend((size, duration))
+    return " · ".join(value for value in specifications if value)
 
 
 def _quick_reference(functions, sessions_by_function):
