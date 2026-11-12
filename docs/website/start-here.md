@@ -9,7 +9,9 @@ or explain a complete activation procedure.
 
 ## Preparation Learning
 
-[Preparation Learning](../preparation-learning/) is a separate introductory
+Begin with [Preparation Learning](../preparation-learning/) before using any
+OCF function. You may skip it only if you have already learned the official
+Human Plus preparation track. Preparation Learning is a separate introductory
 session, not one of the 58 function records. Its own published edition and
 matching transcript appear on its page when present in the verified release
 catalog.
@@ -18,8 +20,8 @@ catalog.
 
 Start with one intention and read that function's guide before choosing an
 edition. You can listen, read its instructions first, or use a transcript. Pause,
-skip, or stop at any time. Do not listen while driving or doing anything that
-requires vigilance.
+skip parts of a recording, or stop listening at any time. Do not listen while
+driving or doing anything that requires vigilance.
 
 ## A suggested way to explore
 
@@ -32,9 +34,9 @@ These three independent functions can be approachable starting points:
 3. [Think Fast — OCF-COG-007](../functions/OCF-COG-007/) — a thinking-oriented
    practice to explore through its own documented instructions.
 
-This is an optional browsing suggestion, not a required sequence. Each practice
-stands on its own; you can choose any function that fits your interest. Reading a
-guide does not mean an audio recording is available.
+After Preparation Learning, you can explore these functions in any order. The
+list is an optional browsing suggestion, not a required sequence among the
+functions. Reading a guide does not mean an audio recording is available.
 
 ## Learn the cues, then choose
 
