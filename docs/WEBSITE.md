@@ -36,7 +36,9 @@ python scripts/build_public_site.py \
   --site-root site --content-dir docs/website \
   --source-pin site/source.json \
   --guide-export public-guide-export.json \
-  --catalog verified-catalog.json --output verified-site
+  --catalog verified-catalog.json \
+  --historical-reference ocf-source/docs/releases/OCF_HISTORICAL_LOOKUP_CURRENT.md \
+  --output verified-site
 python scripts/validate_site.py verified-site
 node scripts/test_catalog.js
 node scripts/test_docs.js

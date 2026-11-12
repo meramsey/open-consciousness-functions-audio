@@ -14,6 +14,7 @@ from build_public_site import (
     _asset_specification,
     _catalog_sessions,
     _inline,
+    _historical_lookup_rows,
     _public_description,
     _quick_reference,
     _recommended_settings,
@@ -23,11 +24,50 @@ from build_public_site import (
     _spoken_cue_references,
     digest,
     fetch_transcript,
+    render_markdown,
     validate_guide_export,
 )
 
 
 class PublicSiteBuildTests(unittest.TestCase):
+    def test_render_markdown_keeps_wrapped_ordered_steps_semantic(self):
+        rendered = render_markdown(
+            "## Suggested way to explore\n\n"
+            "1. [Relax](../functions/OCF-FND-004/) — gentle introduction to\n"
+            "   guided relaxation and listening.\n"
+            "2. [Focus](../functions/OCF-FND-002/) — attention-oriented\n"
+            "   practice.\n"
+            "3. [Think Fast](../functions/OCF-COG-007/) — thinking-oriented\n"
+            "   practice."
+        )
+        self.assertEqual(rendered.count("<ol>"), 1)
+        self.assertEqual(rendered.count("<li>"), 3)
+        self.assertIn("guided relaxation and listening.", rendered)
+        self.assertIn("</li><li>", rendered)
+        self.assertNotIn("<p>1. ", rendered)
+
+    def test_historical_lookup_projection_uses_only_exact_source_names(self):
+        function = {
+            "function_id": "OCF-SEN-003",
+            "title": {"text": "Smell"},
+            "commands": [{"display_cue": {"text": "PLUS-SMELL MORE"}}],
+        }
+        reference = (
+            "# Historical lookup\n\n## Migrated vocabulary\n\n"
+            "- OCF-SEN-003 → Smell / `PLUS-SMELL MORE`; "
+            "historical matches: Sensory: Smell.\n"
+        )
+        self.assertEqual(
+            _historical_lookup_rows(reference, [function]),
+            [{"function_id": "OCF-SEN-003", "title": "Smell", "names": ["Sensory: Smell"]}],
+        )
+        wrong_title = reference.replace("→ Smell /", "→ Taste /")
+        with self.assertRaisesRegex(ValueError, "title does not match"):
+            _historical_lookup_rows(wrong_title, [function])
+        unknown_target = reference.replace("OCF-SEN-003", "OCF-SEN-004")
+        with self.assertRaisesRegex(ValueError, "unknown function"):
+            _historical_lookup_rows(unknown_target, [function])
+
     def test_spoken_cue_reference_replaces_only_the_approved_whole_cue(self):
         commands = [
             {

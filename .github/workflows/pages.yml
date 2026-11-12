@@ -79,6 +79,7 @@ jobs:
             --source-pin site/source.json \
             --guide-export public-guide-export.json \
             --catalog verified-catalog.json \
+            --historical-reference ocf-source/docs/releases/OCF_HISTORICAL_LOOKUP_CURRENT.md \
             --output verified-site
       - run: python scripts/validate_site.py verified-site
       - run: npm ci
