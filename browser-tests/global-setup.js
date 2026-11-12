@@ -12,7 +12,8 @@ module.exports = async () => {
     await fs.mkdir('browser-artifacts', { recursive: true });
     await fs.writeFile('browser-artifacts/acceptance-receipt.json', `${JSON.stringify({
       source_commit: receipt.source_commit,
-      audio_commit: process.env.GITHUB_SHA || execFileSync('git', ['rev-parse', 'HEAD'], { encoding: 'utf8' }).trim(),
+      audio_commit: process.env.AUDIO_HEAD_SHA || execFileSync('git', ['rev-parse', 'HEAD'], { encoding: 'utf8' }).trim(),
+      tested_commit: execFileSync('git', ['rev-parse', 'HEAD'], { encoding: 'utf8' }).trim(),
       catalog_sha256: receipt.catalog_sha256,
       site_inventory_sha256: receipt.site_inventory_sha256,
       generated_file_count: receipt.file_count,

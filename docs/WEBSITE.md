@@ -56,9 +56,10 @@ it. In Pages, this command runs before `verified-site` is uploaded; the deploy
 job depends on the complete validation job. A browser or axe test failure
 therefore fails validation and prevents deployment. The public-safe browser
 artifact includes test results, a print PDF and an acceptance receipt bound to
-the source/audio commits, catalog and generated-site inventory hashes, and
-browser/tool versions. CI installs and gates Chromium; Firefox and WebKit can
-be run locally with `BROWSER=firefox` or `BROWSER=webkit`.
+the pinned source commit, PR head (or pushed audio commit), exact CI-tested
+commit, catalog and generated-site inventory hashes, and browser/tool versions.
+CI installs and gates Chromium; Firefox and WebKit can be run locally with
+`BROWSER=firefox` or `BROWSER=webkit`.
 
 The build copies only the `txt` and `vtt` companions present in the verified
 catalog. Each asset must match the published size and SHA-256 and uniquely

@@ -64,6 +64,8 @@ jobs:
         run: npx playwright install --with-deps chromium
       - name: Test the generated site in Chromium and axe-core
         if: matrix.os == 'ubuntu-latest' && matrix.python == '3.12'
+        env:
+          AUDIO_HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
         run: npm run test:browser
       - name: Retain public-safe browser acceptance evidence
         if: always() && matrix.os == 'ubuntu-latest' && matrix.python == '3.12'

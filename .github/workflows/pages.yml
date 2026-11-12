@@ -84,6 +84,8 @@ jobs:
       - run: npm ci
       - run: npx playwright install --with-deps chromium
       - name: Run browser and accessibility acceptance on the exact build
+        env:
+          AUDIO_HEAD_SHA: ${{ github.sha }}
         run: npm run test:browser
       - name: Retain public-safe browser acceptance evidence
         if: always()
