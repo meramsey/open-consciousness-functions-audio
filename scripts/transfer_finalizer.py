@@ -97,6 +97,8 @@ def verify_final_approval(
     now,
     *,
     private_historical=None,
+    private_instruction_context=None,
+    expected_context_sha256=None,
 ):
     try:
         return _verify_final_approval(
@@ -107,9 +109,16 @@ def verify_final_approval(
             approval,
             now,
             private_historical=private_historical,
+            private_instruction_context=private_instruction_context,
+            expected_context_sha256=expected_context_sha256,
         )
-    except (ValueError, KeyError, TypeError, OSError):
-        if bundle.get("schema_version") == 3:
+    except (ValueError, KeyError, TypeError, AttributeError, OSError):
+        if (
+            (isinstance(bundle, dict) and bundle.get("schema_version") == 3)
+            or (isinstance(approval, dict) and approval.get("schema_version") == 3)
+            or private_instruction_context is not None
+            or expected_context_sha256 is not None
+        ):
             raise ValueError(
                 "private transfer evidence or approval validation failed"
             ) from None
@@ -125,7 +134,27 @@ def _verify_final_approval(
     now,
     *,
     private_historical=None,
+    private_instruction_context=None,
+    expected_context_sha256=None,
 ):
+    if approval.get("schema_version") == 3:
+        from authorization_continuation import verify_final_v3
+
+        return verify_final_v3(
+            bundle,
+            registry,
+            original,
+            reconciliation,
+            approval,
+            now,
+            private_historical=private_historical,
+            private_instruction_context=private_instruction_context,
+            expected_context_sha256=expected_context_sha256,
+        )
+    require(
+        private_instruction_context is None and expected_context_sha256 is None,
+        "legacy approvals cannot consume continuation context",
+    )
     manifest, attestation = bundle["manifest"], bundle["attestation"]
     legacy_controls(manifest)
     _verify_approval_digest(identity(manifest), original)
@@ -300,6 +329,8 @@ def finalize_transfer(
     execute=False,
     now=None,
     private_historical=None,
+    private_instruction_context=None,
+    expected_context_sha256=None,
 ):
     """Only a verified existing draft may transition to published; never repair it.
 
@@ -320,6 +351,8 @@ def finalize_transfer(
         final_approval,
         clock(),
         private_historical=private_historical,
+        private_instruction_context=private_instruction_context,
+        expected_context_sha256=expected_context_sha256,
     )
     require(remote.repository == REPOSITORY, "transport destination mismatch")
     require(
@@ -351,6 +384,12 @@ def finalize_transfer(
             uncertainty_acknowledgement_canonical_sha256=bundle["attestation"][
                 "uncertainty_acknowledgement_canonical_sha256"
             ],
+        )
+    if final_approval["schema_version"] == 3:
+        binding.update(
+            schema_version=3,
+            authorization_contract=3,
+            context_sha256=expected_context_sha256,
         )
     lock = path.with_suffix(path.suffix + ".lock")
     # Same receipt is the serialization boundary; supervisor must also enforce
@@ -413,6 +452,8 @@ def finalize_transfer(
             final_approval,
             clock(),
             private_historical=private_historical,
+            private_instruction_context=private_instruction_context,
+            expected_context_sha256=expected_context_sha256,
         )
         pending = dict(
             binding, state="finalize-requested", ci=ci, tag_ref=fresh["tag_ref"]
@@ -427,6 +468,8 @@ def finalize_transfer(
                 final_approval=final_approval,
                 intent_path=path,
                 private_historical=private_historical,
+                private_instruction_context=private_instruction_context,
+                expected_context_sha256=expected_context_sha256,
             )
         except (ValueError, OSError, subprocess.TimeoutExpired):
             # Read-only reconciliation even when the response was lost. Leave
@@ -679,6 +722,8 @@ class TransferGitHub:
         final_approval,
         intent_path,
         private_historical=None,
+        private_instruction_context=None,
+        expected_context_sha256=None,
     ):
         require(self._execute, "read-only transfer transport cannot finalize")
         require(
@@ -698,6 +743,8 @@ class TransferGitHub:
             final_approval,
             now,
             private_historical=private_historical,
+            private_instruction_context=private_instruction_context,
+            expected_context_sha256=expected_context_sha256,
         )
         self.verify_execution_context(
             final_approval["ci_commits"]["distribution"], registry
@@ -716,7 +763,8 @@ class TransferGitHub:
         )
         if bundle["schema_version"] == 3:
             require(
-                intent.get("schema_version") == 2
+                intent.get("schema_version")
+                == (3 if final_approval["schema_version"] == 3 else 2)
                 and intent.get("mode") == MODE
                 and intent.get("uncertainty_acknowledgement_canonical_sha256")
                 == self.attestation["uncertainty_acknowledgement_canonical_sha256"],
@@ -727,6 +775,20 @@ class TransferGitHub:
                 "mode" not in intent
                 and "uncertainty_acknowledgement_canonical_sha256" not in intent,
                 "v1 intent cannot contain v2 mode",
+            )
+        if final_approval["schema_version"] == 3:
+            require(
+                type(intent.get("authorization_contract")) is int
+                and intent.get("authorization_contract") == 3
+                and type(intent.get("schema_version")) is int
+                and intent.get("context_sha256") == expected_context_sha256,
+                "continuation intent binding mismatch",
+            )
+        else:
+            require(
+                "authorization_contract" not in intent
+                and "context_sha256" not in intent,
+                "legacy intent cannot contain continuation contract",
             )
         validate_current(
             self.snapshot(download=False), bundle, datetime.now(UTC), published=False
@@ -739,6 +801,8 @@ class TransferGitHub:
             final_approval,
             datetime.now(UTC),
             private_historical=private_historical,
+            private_instruction_context=private_instruction_context,
+            expected_context_sha256=expected_context_sha256,
         )
         # Durable one-attempt guard also protects direct native calls and
         # concurrent callers. Never remove/reuse this marker after any outcome.
@@ -756,6 +820,10 @@ class TransferGitHub:
         if bundle["schema_version"] == 3:
             attempt_record["uncertainty_acknowledgement_canonical_sha256"] = (
                 self.attestation["uncertainty_acknowledgement_canonical_sha256"]
+            )
+        if final_approval["schema_version"] == 3:
+            attempt_record.update(
+                authorization_contract=3, context_sha256=expected_context_sha256
             )
         durable_exclusive(release_attempt, attempt_record)
         durable_exclusive(attempt, attempt_record)
@@ -789,6 +857,11 @@ def main(argv=None):
         type=Path,
         help="Private authenticated v2 historical evidence; never part of public registry",
     )
+    parser.add_argument("--private-instruction-context", type=Path)
+    parser.add_argument(
+        "--expected-context-sha256",
+        help="Independent authenticated context pin; never derive from supplied JSON",
+    )
     parser.add_argument(
         "--execute",
         action="store_true",
@@ -810,12 +883,20 @@ def main(argv=None):
     private_historical = (
         load_json(args.private_historical) if args.private_historical else None
     )
+    private_instruction_context = (
+        load_json(args.private_instruction_context)
+        if args.private_instruction_context
+        else None
+    )
+    expected_context_sha256 = args.expected_context_sha256
     verify_final_approval(
         bundle,
         registry,
         *approvals,
         datetime.now(UTC),
         private_historical=private_historical,
+        private_instruction_context=private_instruction_context,
+        expected_context_sha256=expected_context_sha256,
     )
     result = finalize_transfer(
         manifest,
@@ -826,7 +907,21 @@ def main(argv=None):
         args.receipt,
         execute=args.execute,
         private_historical=private_historical,
+        private_instruction_context=private_instruction_context,
+        expected_context_sha256=expected_context_sha256,
     )
+    if approvals[2].get("schema_version") == 3:
+        # Full receipt stays private; stdout can be captured by public logs.
+        result = {
+            key: result[key]
+            for key in (
+                "schema_version",
+                "purpose",
+                "repository_id",
+                "release_id",
+                "state",
+            )
+        }
     print(json.dumps(result))
 
 
