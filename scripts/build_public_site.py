@@ -958,8 +958,25 @@ def _function_page(function, sessions, transcript_paths, source_commit):
             procedure_html = '<p class="not-specified">Procedure wording is not published while review is pending.</p>'
         else:
             procedure_html = '<p class="not-specified">No activation steps are specified. Do not infer a procedure from the cue name.</p>'
+        usage_html = (
+            "<p>" + _html(command["usage"]["text"]) + "</p>"
+            if command.get("usage")
+            else ""
+        )
+        explanation_html = (
+            "<p>" + _html(command["explanation"]["text"]) + "</p>"
+            if command.get("explanation")
+            else ""
+        )
+        scope_html = (
+            '<p class="scope-note">Effect scope: '
+            + _html(command["effect_scope"])
+            + "</p>"
+            if command.get("effect_scope")
+            else ""
+        )
         command_sections.append(
-            f'''<section class="command-block"><h3>{"Primary activation" if command["designation"] == "primary" else "Secondary command"} <span class="stable-id">{_html(command["command_id"])}</span></h3><p class="display-cue"><span class="field-label">Display cue</span> <strong>{_html(cue["text"])}</strong><button type="button" class="copy-cue" data-copy="{_html(cue["text"])}">Copy cue</button></p>{spoken}{f"<p>{_html(command["usage"]["text"])}</p>" if command.get("usage") else ""}{f"<p>{_html(command["explanation"]["text"])}</p>" if command.get("explanation") else ""}<h4>Documented activation steps</h4>{procedure_html}{f'<p class="scope-note">Effect scope: {_html(command["effect_scope"])}</p>' if command.get("effect_scope") else ""}</section>'''
+            f'''<section class="command-block"><h3>{"Primary activation" if command["designation"] == "primary" else "Secondary command"} <span class="stable-id">{_html(command["command_id"])}</span></h3><p class="display-cue"><span class="field-label">Display cue</span> <strong>{_html(cue["text"])}</strong><button type="button" class="copy-cue" data-copy="{_html(cue["text"])}">Copy cue</button></p>{spoken}{usage_html}{explanation_html}<h4>Documented activation steps</h4>{procedure_html}{scope_html}</section>'''
         )
     historical = "".join(
         f'<li><strong>{_html(command["display_cue"]["text"])}</strong> <span class="stable-id">{_html(command["command_id"])}</span> — Historical/inactive alias; not a current activation command.</li>'
@@ -970,11 +987,41 @@ def _function_page(function, sessions, transcript_paths, source_commit):
         if historical
         else ""
     )
-    scopes = "".join(
-        f"<li><strong>{_html(scope['label'])}</strong> — {_html(scope['persistence'])}{f': {_html(scope["description"])}' if scope.get('description') else ''}{' <span class=review-status>(description review status not recorded)</span>' if scope['description_status'] == 'unspecified' else ''}</li>"
-        for scope in function["lifecycle"]["scopes"]
+    scope_rows = []
+    for scope in function["lifecycle"]["scopes"]:
+        description = (
+            ": " + _html(scope["description"]) if scope.get("description") else ""
+        )
+        review = (
+            " <span class=review-status>(description review status not recorded)</span>"
+            if scope["description_status"] == "unspecified"
+            else ""
+        )
+        scope_rows.append(
+            f"<li><strong>{_html(scope['label'])}</strong> — "
+            f"{_html(scope['persistence'])}{description}{review}</li>"
+        )
+    scopes_html = (
+        "<ul>" + "".join(scope_rows) + "</ul>"
+        if scope_rows
+        else "<p>No additional lifecycle scopes are declared.</p>"
     )
-    lifecycle = f"""<section class="guide-section"><h2 id="behavior">Lifecycle and behavior</h2><p>Activation: {_html(function["lifecycle"]["activation"] or "not specified")}. Intended persistence: {_html(function["lifecycle"]["persistence"] or "not specified")}.</p>{f"<ul>{scopes}</ul>" if scopes else "<p>No additional lifecycle scopes are declared.</p>"}{f"<p>Declared trigger conditions: {_html("; ".join(function["lifecycle"]["trigger_conditions"]))}</p>" if function["lifecycle"]["trigger_conditions"] else ""}{f"<p>Declared release command: <strong>{_html(function["lifecycle"]["release_command"])}</strong></p>" if function["lifecycle"]["release_command"] else "<p>No separate release command is specified.</p>"}<p>These are documented practice semantics, not software sensors, guaranteed effects, or a guarantee that a state starts or continues.</p></section>"""
+    lifecycle = function["lifecycle"]
+    trigger_text = "; ".join(lifecycle["trigger_conditions"])
+    trigger_html = (
+        "<p>Declared trigger conditions: " + _html(trigger_text) + "</p>"
+        if trigger_text
+        else ""
+    )
+    release_command = lifecycle["release_command"]
+    release_html = (
+        "<p>Declared release command: <strong>"
+        + _html(release_command)
+        + "</strong></p>"
+        if release_command
+        else "<p>No separate release command is specified.</p>"
+    )
+    lifecycle_html = f"""<section class="guide-section"><h2 id="behavior">Lifecycle and behavior</h2><p>Activation: {_html(lifecycle["activation"] or "not specified")}. Intended persistence: {_html(lifecycle["persistence"] or "not specified")}.</p>{scopes_html}{trigger_html}{release_html}<p>These are documented practice semantics, not software sensors, guaranteed effects, or a guarantee that a state starts or continues.</p></section>"""
     safety_html = "".join(
         f"<li>{_html(note)}</li>" for note in function["safety_notes"]
     )
@@ -997,7 +1044,7 @@ def _function_page(function, sessions, transcript_paths, source_commit):
     breadcrumb = f'<nav class="breadcrumbs" aria-label="Breadcrumb"><a href="../../">Home</a> / <a href="../">Functions</a> / {_html(function["title"]["text"])}</nav>'
     return (
         breadcrumb
-        + f'''<header class="page-intro" data-function-id="{_html(function["function_id"])}"><p class="eyebrow">{_html(function["function_id"])} · {_html(categories)}</p><h1>{_html(function["title"]["text"])}</h1><p class="lead">{_html(function["description"]["text"])}</p><p class="status-line">Title: {_html(function["title"]["status"])} · Description: {_html(function["description"]["status"])}</p></header><section class="guide-section"><h2 id="overview">Intended purpose</h2><p>{_html(function["description"]["text"])}</p>{terms}<p class="source-link">Canonical function source: <a href="{SOURCE_REPOSITORY}/tree/{source_commit}/{_html(function["canonical_resource"])}">this locale resource at pinned commit {source_commit[:12]}</a>.</p></section><section class="guide-section"><h2 id="cues">Cues and documented instructions</h2><p>Display cues and spoken cues are different fields. Saying a cue alone does not replace these steps.</p>{"".join(command_sections)}{historical_html}</section>{lifecycle}{safety}<section class="guide-section"><h2 id="listening">Published audio editions</h2><p>Audio availability, voice and transcript are edition-specific. Only release-manifest assets are listed here.</p>{session_html}</section><section class="guide-section"><h2 id="related">Approved related functions</h2><ul class="relationship-list">{related_html}</ul><p>These links are optional and directional. They are not prerequisites or claims of combined effect.</p></section>'''
+        + f'''<header class="page-intro" data-function-id="{_html(function["function_id"])}"><p class="eyebrow">{_html(function["function_id"])} · {_html(categories)}</p><h1>{_html(function["title"]["text"])}</h1><p class="lead">{_html(function["description"]["text"])}</p><p class="status-line">Title: {_html(function["title"]["status"])} · Description: {_html(function["description"]["status"])}</p></header><section class="guide-section"><h2 id="overview">Intended purpose</h2><p>{_html(function["description"]["text"])}</p>{terms}<p class="source-link">Canonical function source: <a href="{SOURCE_REPOSITORY}/tree/{source_commit}/{_html(function["canonical_resource"])}">this locale resource at pinned commit {source_commit[:12]}</a>.</p></section><section class="guide-section"><h2 id="cues">Cues and documented instructions</h2><p>Display cues and spoken cues are different fields. Saying a cue alone does not replace these steps.</p>{"".join(command_sections)}{historical_html}</section>{lifecycle_html}{safety}<section class="guide-section"><h2 id="listening">Published audio editions</h2><p>Audio availability, voice and transcript are edition-specific. Only release-manifest assets are listed here.</p>{session_html}</section><section class="guide-section"><h2 id="related">Approved related functions</h2><ul class="relationship-list">{related_html}</ul><p>These links are optional and directional. They are not prerequisites or claims of combined effect.</p></section>'''
     )
 
 
@@ -1075,7 +1122,16 @@ def _session_card(row, transcript_paths, *, site_root_prefix="../../"):
         companion_links.append(
             f'<li><a href="{_html(asset["download_url"])}">{_html("Artwork" if fmt == "png" else fmt.upper() + " companion")}</a> <span>SHA-256 {_html(asset["sha256"])}</span></li>'
         )
-    return f'''<article class="edition-card"><div class="edition-heading">{artwork}<div><h3>{_html(title)}</h3><p>{_html(session["locale"])} · {_html(session["voice_name"])} · edition {_html(session["edition"])}</p><p>Published release <a href="{_html(release["release_url"])}">{_html(release["tag"])}</a> · source audio commit {_html(release["source_ocf_commit"][:12])}</p></div></div>{"".join(audio)}{"".join(transcript_controls)}{f"<details><summary>Other companion files</summary><ul>{"".join(companion_links)}</ul></details>" if companion_links else ""}</article>'''
+    companion_html = (
+        "<details><summary>Other companion files</summary><ul>"
+        + "".join(companion_links)
+        + "</ul></details>"
+        if companion_links
+        else ""
+    )
+    audio_html = "".join(audio)
+    transcript_html = "".join(transcript_controls)
+    return f'''<article class="edition-card"><div class="edition-heading">{artwork}<div><h3>{_html(title)}</h3><p>{_html(session["locale"])} · {_html(session["voice_name"])} · edition {_html(session["edition"])}</p><p>Published release <a href="{_html(release["release_url"])}">{_html(release["tag"])}</a> · source audio commit {_html(release["source_ocf_commit"][:12])}</p></div></div>{audio_html}{transcript_html}{companion_html}</article>'''
 
 
 def _quick_reference(functions, sessions_by_function):
