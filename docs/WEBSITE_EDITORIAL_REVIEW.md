@@ -32,6 +32,8 @@
   source evidence paths, and unreleased text are not part of the website export.
 - Transcript wording remains exact to its published release edition; the site
   never substitutes current canonical narration for an older recording.
+- Shared comfort and safety guidance remains in the listening guide; individual
+  pages link to it and show only function-specific precaution notes.
 - Existing published MP3, FLAC, artwork, manifest, transcript, collection,
   checksum, URL, tag, and historical-release bytes/identities are unchanged.
 - No treatment, guaranteed-state, cumulative biological, or listening-efficacy

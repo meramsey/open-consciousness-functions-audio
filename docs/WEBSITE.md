@@ -43,6 +43,9 @@ catalog. Each asset must match the published size and SHA-256 and uniquely
 match one session's declared audio-master fingerprint. No private or
 unpublished transcript is fetched. Browser player URLs remain the original
 release URLs; the build does not download, convert, or republish audio.
+Transient HTTP 429/5xx errors during companion retrieval receive at most two
+bounded, delayed retries; permanent errors, redirects outside GitHub, and any
+size/hash mismatch fail the staged build closed.
 
 The deployment job uploads only the successfully validated artifact and has
 separate Pages permissions. The checked-in `site/catalog.json` remains a
