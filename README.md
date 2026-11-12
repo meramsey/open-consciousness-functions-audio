@@ -12,6 +12,25 @@ assets preserved through the transfer. See [the transfer checklist](docs/ORG_MIG
 
 **Releases:** https://github.com/ocfproject-org/open-consciousness-functions-audio/releases
 
+## Documentation-first website
+
+The Pages build now combines a pinned, deterministic function-guide export from
+the main OCF repository with this repository's verified release catalog. The
+main repository remains the only authority for function identities, cues,
+procedures and approved relationships; this repository owns site presentation
+and listening/device editorial guidance. The pinned source commit is recorded
+in [`site/source.json`](site/source.json), and the generated artifact includes
+`site-build-receipt.json` with source, release-manifest, catalog and file-tree
+fingerprints.
+
+Published transcript text is matched to the selected audio edition by the
+verified master fingerprint in the release catalog, then checked against the
+manifest's byte size and SHA-256 before it is included for same-origin reading.
+Canonical or draft narration is not exported as transcript content. See the
+[parity and architecture audit](docs/WEBSITE_PARITY_AUDIT.md),
+[editorial review](docs/WEBSITE_EDITORIAL_REVIEW.md), and
+[website maintenance guide](docs/WEBSITE.md).
+
 ## Publication status
 
 The [first public audio release](https://github.com/ocfproject-org/open-consciousness-functions-audio/releases/tag/audio-0.1.0-a6-20261111) is available: 59 approved sessions, with individual MP3 and lossless FLAC downloads, collection archives, playlists, artwork and checksums. Browse the [audio library](https://ocfproject-org.github.io/open-consciousness-functions-audio/) for the available sessions and editions.

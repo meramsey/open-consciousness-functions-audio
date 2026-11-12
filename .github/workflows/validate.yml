@@ -25,6 +25,17 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
+      - name: Resolve pinned OCF source commit
+        id: source
+        shell: bash
+        run: echo "commit=$(python -c 'import json; print(json.load(open("site/source.json"))["source_commit"])')" >> "$GITHUB_OUTPUT"
+      - uses: actions/checkout@v4
+        with:
+          repository: ocfproject-org/open-consciousness-functions
+          ref: ${{ steps.source.outputs.commit }}
+          path: ocf-source
+      - name: Install pinned OCF documentation dependencies
+        run: python -m pip install -e ./ocf-source
       - name: Validate site and catalog
         run: python scripts/validate_site.py
       - name: Run offline publication and catalog tests
@@ -33,3 +44,14 @@ jobs:
         run: node --check site/assets/js/app.js
       - name: Test catalog search and selection logic
         run: node scripts/test_catalog.js
+      - name: Test documentation search and transcript URL safety
+        run: node scripts/test_docs.js
+      - name: Build the complete pinned website and verify published sidecars
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PYTHONPATH: ocf-source/scripts
+        run: |
+          python scripts/refresh_catalog.py --output verified-catalog.json
+          python -m ocf_tools.public_site_export --source-commit "${{ steps.source.outputs.commit }}" --output public-guide-export.json
+          python scripts/build_public_site.py --site-root site --content-dir docs/website --source-pin site/source.json --guide-export public-guide-export.json --catalog verified-catalog.json --output verified-site
+          python scripts/validate_site.py verified-site
