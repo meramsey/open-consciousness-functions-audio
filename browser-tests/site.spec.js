@@ -76,6 +76,114 @@ test('Insulate hold guidance uses the approved spoken Cancel cue, including copy
   expect(guidance).not.toContain('PLUS-CANCEL');
 });
 
+test('release downloads stay direct and mobile users get a truthful copy-and-rename filename suggestion', async ({ page, context, browserName }) => {
+  const catalog = await page.request.get('/catalog.json').then(response => response.json());
+  const release = catalog.releases[0];
+  const session = release.functions.find(row => row.function_id === 'OCF-FND-004').sessions[0];
+  const mp3 = session.assets.find(asset => asset.format === 'mp3');
+  const routeHit = [];
+  await page.route(mp3.download_url, async route => {
+    routeHit.push(true);
+    await route.fulfill({
+      status: 200,
+      contentType: 'audio/mpeg',
+      headers: { 'Content-Disposition': `attachment; filename="${mp3.filename}"` },
+      body: Buffer.from([0x49]),
+    });
+  });
+  if (browserName === 'chromium') {
+    await context.grantPermissions(['clipboard-read', 'clipboard-write']);
+  }
+
+  await page.setViewportSize({ width: 320, height: 900 });
+  await page.goto('/functions/OCF-FND-004/');
+  const row = page.locator('.asset-download[data-download-format="mp3"]');
+  await expect(row).toHaveCount(1);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(320);
+  expect(await row.evaluate(element => element.scrollWidth <= element.clientWidth)).toBe(true);
+
+  const suggested = await row.locator('.download-name-note code').textContent();
+  expect(suggested).toContain('OCF-FND-004');
+  expect(suggested).toContain('Relax');
+  expect(suggested).toContain(session.locale);
+  expect(suggested).toContain('Mike');
+  expect(suggested).toContain(`v${session.edition}`);
+  expect(suggested).toContain(release.tag);
+  expect(suggested.endsWith('.mp3')).toBe(true);
+  expect(suggested).not.toContain(mp3.filename.slice(-16, -4));
+
+  const link = row.locator('a.download-link');
+  await expect(link).toHaveAttribute('href', mp3.download_url);
+  await expect(link).toHaveAttribute('download', suggested);
+  await expect(row).toContainText('rename the downloaded file locally');
+  await expect(row).toContainText('not buffered by this page');
+  const copy = row.getByRole('button', { name: `Copy name: ${suggested}` });
+  await expect(copy).toBeVisible();
+  await expect(copy).toHaveAttribute('data-copy', suggested);
+  if (browserName === 'chromium') {
+    await copy.click();
+    await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toBe(suggested);
+  } else {
+    await page.evaluate(() => Object.defineProperty(navigator, 'clipboard', {
+      configurable: true,
+      value: { writeText: async () => { throw new Error('clipboard unavailable'); } },
+    }));
+    await copy.click();
+    await expect(copy).toHaveText(suggested);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(320);
+  }
+
+  if (browserName === 'webkit') {
+    const requestPromise = page.waitForRequest(mp3.download_url);
+    const responsePromise = page.waitForResponse(mp3.download_url);
+    await link.click();
+    const [request, response] = await Promise.all([requestPromise, responsePromise]);
+    expect(request.url()).toBe(mp3.download_url);
+    expect(response.status()).toBe(200);
+    expect(response.headers()['content-disposition']).toContain(mp3.filename);
+    expect(routeHit).toHaveLength(1);
+    return;
+  }
+  const [download] = await Promise.all([page.waitForEvent('download'), link.click()]);
+  expect(routeHit).toHaveLength(1);
+  expect(download.suggestedFilename()).toBe(mp3.filename);
+  expect(download.suggestedFilename()).not.toBe(suggested);
+});
+
+test('cross-origin release response behavior is explicit without buffering the release asset', async ({ page, browserName }) => {
+  const catalog = await page.request.get('/catalog.json').then(response => response.json());
+  const release = catalog.releases[0];
+  const session = release.functions.find(row => row.function_id === 'OCF-FND-004').sessions[0];
+  const mp3 = session.assets.find(asset => asset.format === 'mp3');
+  const deliveredBytes = Buffer.from([0x49]);
+  await page.route(mp3.download_url, route => route.fulfill({
+    status: 200,
+    contentType: 'audio/mpeg',
+    headers: { 'Content-Disposition': `attachment; filename="${mp3.filename}"` },
+    body: deliveredBytes,
+  }));
+  await page.goto('/functions/OCF-FND-004/');
+  const row = page.locator('.asset-download[data-download-format="mp3"]');
+  const friendly = await row.locator('.download-link').getAttribute('download');
+  expect(friendly).not.toBe(mp3.filename);
+  if (browserName === 'webkit') {
+    const requestPromise = page.waitForRequest(mp3.download_url);
+    const responsePromise = page.waitForResponse(mp3.download_url);
+    await row.locator('.download-link').click();
+    const [request, response] = await Promise.all([requestPromise, responsePromise]);
+    expect(request.url()).toBe(mp3.download_url);
+    expect(response.status()).toBe(200);
+    expect(response.headers()['content-disposition']).toContain(mp3.filename);
+    expect(deliveredBytes.byteLength).toBe(1);
+    return;
+  }
+  const [download] = await Promise.all([page.waitForEvent('download'), row.locator('.download-link').click()]);
+  expect(download.suggestedFilename()).toBe(mp3.filename);
+  expect(download.suggestedFilename()).not.toBe(friendly);
+  expect(deliveredBytes.byteLength).toBe(1);
+  expect(browserName).toMatch(/^(chromium|firefox|webkit)$/);
+});
+
 test('Quick Reference filters, keyboard controls, narrow widths, print, themes, transcript and deep links work', async ({ page, browserName }) => {
   for (const width of [375, 768, 1024, 1440]) {
     await page.setViewportSize({ width, height: 900 });

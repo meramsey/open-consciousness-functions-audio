@@ -497,6 +497,7 @@ def build_public_site(
     all_session_rows = [
         row for rows in sessions_by_function.values() for row in rows
     ] + preparation_sessions
+    _validate_suggested_download_filenames(all_session_rows)
     with tempfile.TemporaryDirectory(
         prefix="ocf-site-build-", dir=output.parent
     ) as staging_name:
@@ -1171,6 +1172,9 @@ def _session_card(row, transcript_paths, *, site_root_prefix="../../"):
         )
     for asset in row["audio_assets"]:
         fmt = asset["format"].upper()
+        suggested_filename = _suggested_download_filename(
+            row["group"], session, release, asset
+        )
         size = (
             f"{asset.get('size_bytes', 0) / 1048576:.1f} MiB"
             if asset.get("size_bytes")
@@ -1183,7 +1187,7 @@ def _session_card(row, transcript_paths, *, site_root_prefix="../../"):
         )
         specification_text = _asset_specification(asset, size=size, duration=duration)
         audio.append(
-            f'<p class="asset-download"><a href="{_html(asset["download_url"])}" download>Download {fmt}</a> <span>{_html(specification_text)}</span> <details><summary>Checksum</summary><code>{_html(asset["sha256"])}</code></details></p>'
+            f'''<div class="asset-download" data-download-format="{_html(asset["format"])}"><div class="download-actions"><a class="download-link" href="{_html(asset["download_url"])}" download="{_html(suggested_filename)}">Download {fmt}</a><button type="button" class="copy-filename" data-copy="{_html(suggested_filename)}" aria-label="Copy name: {_html(suggested_filename)}">Copy name</button></div><p class="download-specification">{_html(specification_text)}</p><p class="download-name-note">Suggested local filename: <code>{_html(suggested_filename)}</code>. The release server may use its own filename; if so, rename the downloaded file locally. Audio is downloaded directly and is not buffered by this page.</p><details><summary>Checksum</summary><code>{_html(asset["sha256"])}</code></details></div>'''
         )
     transcript_controls = []
     for fmt, label in (("txt", "Read transcript"), ("vtt", "Download timed subtitles")):
@@ -1241,6 +1245,44 @@ def _asset_specification(asset, *, size=None, duration=None):
         )
     specifications.extend((size, duration))
     return " · ".join(value for value in specifications if value)
+
+
+def _suggested_download_filename(group, session, release, asset):
+    extension = str(asset.get("format", "")).casefold()
+    if not re.fullmatch(r"[a-z0-9]{1,8}", extension):
+        raise ValueError(f"unsupported suggested-download extension: {extension!r}")
+    identity = group.get("function_id") or "Preparation"
+    values = (
+        identity,
+        session.get("title") or group.get("title") or "Session",
+        session["locale"],
+        session["voice_name"],
+        f"v{session['edition']}",
+        release["tag"],
+    )
+    parts = [
+        re.sub(r"\s+", " ", re.sub(r'[\x00-\x1f<>:"/\\|?*]+', "-", str(value)))
+        .strip(" .-")
+        for value in values
+    ]
+    return " - ".join(part for part in parts if part) + f".{extension}"
+
+
+def _validate_suggested_download_filenames(session_rows):
+    seen = {}
+    for row in session_rows:
+        for asset in row["audio_assets"]:
+            filename = _suggested_download_filename(
+                row["group"], row["session"], row["release"], asset
+            )
+            key = filename.casefold()
+            if key in seen:
+                previous = seen[key]
+                raise ValueError(
+                    "published audio assets share a suggested local filename: "
+                    f"{previous['function_id']} and {row['group'].get('function_id', 'preparation')} / {filename}"
+                )
+            seen[key] = {"function_id": row["group"].get("function_id", "preparation")}
 
 
 def _quick_reference(functions, sessions_by_function):

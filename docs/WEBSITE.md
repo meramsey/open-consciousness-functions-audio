@@ -85,7 +85,11 @@ Browser checks cover responsive widths, deep-link reloads, search, transcript
 expansion and layout. Technical MP3 playback/seek probes, when performed, must
 use one exact public edition URL, cap each byte-range request and record the
 edition-matched TXT/VTT companion master fingerprint; this is not a full
-download test. The repository's three-platform test matrix runs Python
+download test. Audio links stay pinned to release assets. Each audio row also
+offers a hash-free, descriptive local filename to copy; cross-origin release
+responses may keep the server's hash-bearing filename, in which case rename it
+in the device's file manager after download. The page does not fetch audio into
+a Blob or buffer large files. The repository's three-platform test matrix runs Python
 3.11/3.12 and Node 22. None of these checks establish physical-device
 playback, hearing experience, native operating-system setting behavior,
 release/listening approval, or medical efficacy. Record those boundaries in
