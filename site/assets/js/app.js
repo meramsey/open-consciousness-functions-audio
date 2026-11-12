@@ -5,17 +5,20 @@
     try { const url = new URL(value); return url.protocol === 'https:' && !url.username && !url.password ? url.href : null; }
     catch (_) { return null; }
   };
-  const entries = catalog => (catalog.releases || []).flatMap(release =>
+  const entries = (catalog, documentation = {}) => (catalog.releases || []).flatMap(release =>
     [...(release.preparations || []), ...(release.functions || [])].flatMap(fn =>
       (fn.sessions || []).map(session => ({
         id: fn.function_id || 'preparation-learning', title: session.title || fn.title,
-        description: fn.description || '', locale: session.locale || session.language || '',
+        description: documentation.byId?.[fn.function_id]?.description || fn.description || '',
+        searchText: documentation.byId?.[fn.function_id]?.searchText || '',
+        href: fn.function_id ? `functions/${encodeURIComponent(fn.function_id)}/` : 'preparation-learning/',
+        locale: session.locale || session.language || '',
         voice: session.voice_name || session.voice_id || '', voiceId: session.voice_id || '',
         edition: session.edition || release.version, date: release.date,
         releaseURL: safeURL(release.release_url), assets: (session.assets || []).filter(a => safeURL(a.download_url))
       }))));
   const filterEntries = (items, query, locale, voice) => items.filter(item =>
-    `${item.id} ${item.title} ${item.description}`.toLocaleLowerCase().includes(query.toLocaleLowerCase()) &&
+    `${item.id} ${item.title} ${item.description} ${item.searchText}`.toLocaleLowerCase().includes(query.toLocaleLowerCase()) &&
     (!locale || item.locale === locale) && (!voice || item.voiceId === voice));
   const downloadList = assets => assets.map(a => `${a.sha256}  ${a.filename}\n${a.download_url}`).join('\n\n') + '\n';
   const supportedCatalog = catalog => [1, 2, 3].includes(catalog.schema_version) && Array.isArray(catalog.releases);
@@ -59,7 +62,7 @@
     visible.forEach(item => {
       const card = el('article', undefined, 'session-card');
       const title = el('h3'); const page = el('a', item.title);
-      page.href = `?function=${encodeURIComponent(item.id)}#library`; title.append(page); card.append(title);
+      page.href = item.href; title.append(page); card.append(title);
       card.append(el('p', `${item.id} · ${item.locale} · ${item.voice} · v${item.edition}`, 'session-meta'));
       if (item.description) card.append(el('p', item.description));
       const mp3 = item.assets.find(a => a.format === 'mp3');
@@ -80,11 +83,20 @@
       results.append(card);
     });
   }
-  fetch('catalog.json').then(response => {
-    if (!response.ok) throw new Error('Catalog unavailable'); return response.json();
-  }).then(catalog => {
+  Promise.all([
+    fetch('catalog.json').then(response => { if (!response.ok) throw new Error('Catalog unavailable'); return response.json(); }),
+    fetch('documentation-index.json').then(response => response.ok ? response.json() : {functions: []}).catch(() => ({functions: []})),
+    fetch('source.json').then(response => response.ok ? response.json() : {}).catch(() => ({}))
+  ]).then(([catalog, documentationIndex, sourcePin]) => {
     if (!supportedCatalog(catalog)) throw new Error('Unsupported catalog');
-    const items = entries(catalog);
+    if (documentationIndex.source_commit !== sourcePin.source_commit) documentationIndex = {functions: []};
+    const documentation = {
+      byId: Object.fromEntries((documentationIndex.functions || []).map(row => [row.function_id, {
+        description: row.description,
+        searchText: `${row.categories.join(' ')} ${row.cues.join(' ')} ${row.search_terms.join(' ')}`
+      }]))
+    };
+    const items = entries(catalog, documentation);
     const extras = document.getElementById('release-extras');
     catalog.releases.forEach(release => {
       const files = [...(release.collections || []), ...(release.companions || [])].filter(a => safeURL(a.download_url));
