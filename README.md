@@ -7,14 +7,14 @@ This repository is the public audio distribution companion to the [Open Consciou
 **Planned custom domain:** https://ocfproject.org (domain cutover pending; use the live library link above).
 
 Both repositories now belong to `ocfproject-org`; the library is deployed at the
-project URL above. Audio publication remains held pending destination reconciliation
-and final release approval. See [the transfer checklist](docs/ORG_MIGRATION.md).
+project URL above. The approved first audio release is published with its original
+assets preserved through the transfer. See [the transfer checklist](docs/ORG_MIGRATION.md).
 
 **Releases:** https://github.com/ocfproject-org/open-consciousness-functions-audio/releases
 
 ## Publication status
 
-Preparing the first public audio release. No audio downloads are available yet. Future editions may offer individual MP3 and lossless FLAC sessions, with supported language and voice variants described in the catalog. No release date or edition is promised.
+The [first public audio release](https://github.com/ocfproject-org/open-consciousness-functions-audio/releases/tag/audio-0.1.0-a6-20261111) is available: 59 approved sessions, with individual MP3 and lossless FLAC downloads, collection archives, playlists, artwork and checksums. Browse the [audio library](https://ocfproject-org.github.io/open-consciousness-functions-audio/) for the available sessions and editions.
 
 OCF is an independent, open-source project. It is not affiliated with The Monroe Institute or Hemi-Sync.
 
@@ -38,7 +38,7 @@ GitHub Actions validates pull requests and default-branch changes. A separate Pa
 
 ## Catalog and future releases
 
-`site/catalog.json` is an empty, versioned catalog until an authorized release exists. Its contract is documented in [docs/release-format.md](docs/release-format.md). It is designed for stable function identifiers, historical versions, languages, voices, session assets, checksums, technical metadata, provenance, companion files, artwork, and verified mirrors. Unchanged audio need not be re-uploaded for unrelated OCF software releases.
+`site/catalog.json` is the versioned base catalog. Each Pages deployment rebuilds the live catalog from verified published releases and reviewed transfer commitments; unpublished drafts are excluded. Its contract is documented in [docs/release-format.md](docs/release-format.md). It is designed for stable function identifiers, historical versions, languages, voices, session assets, checksums, technical metadata, provenance, companion files, artwork, and verified mirrors. Unchanged audio need not be re-uploaded for unrelated OCF software releases.
 
 Future release assets may include separate MP3/FLAC sessions, artwork, collection packs of individual playable files, M3U8 playlists, release notes, machine-readable manifests, and `SHA256SUMS.txt`. Verify a downloaded file against a trusted release checksum with `sha256sum -c SHA256SUMS.txt`. Large collections may need splitting to respect GitHub Release asset limits; individual assets remain separately downloadable. Internet Archive and optional MEGA mirrors are planned only with verification and clear provenance.
 
