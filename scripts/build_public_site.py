@@ -1234,7 +1234,7 @@ def _quick_reference(functions, sessions_by_function):
             searchable.append(command["display_cue"]["text"])
         category = function["primary_category"]
         rows.append(
-            f'<tr data-reference-row data-search="{_html(" ".join(searchable).casefold())}" data-category="{_html(category)}"><th scope="row"><a href="../functions/{_html(function["function_id"])}/">{_html(function["title"]["text"])}</a><span class="stable-id">{_html(function["function_id"])}</span><span class="category-chip">{_html(category)}</span></th><td><ul>{"".join(cue_rows)}</ul></td><td>{_html(function["description"]["text"])}</td><td>{"Published audio available" if sessions_by_function.get(function["function_id"]) else "Audio unavailable"}</td></tr>'
+            f'<tr data-reference-row data-search="{_html(" ".join(searchable).casefold())}" data-category="{_html(" ".join(category["id"] for category in function["categories"]))}"><th scope="row"><a href="../functions/{_html(function["function_id"])}/">{_html(function["title"]["text"])}</a><span class="stable-id">{_html(function["function_id"])}</span><span class="category-chip">{_html(category)}</span></th><td><ul>{"".join(cue_rows)}</ul></td><td>{_html(function["description"]["text"])}</td><td>{"Published audio available" if sessions_by_function.get(function["function_id"]) else "Audio unavailable"}</td></tr>'
         )
     options = "".join(
         f'<option value="{_html(item["id"])}">{_html(item["label"])}</option>'

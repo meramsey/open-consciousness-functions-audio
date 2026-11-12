@@ -149,6 +149,24 @@ class PublicSiteBuildTests(unittest.TestCase):
         self.assertIn("Audio unavailable", unavailable)
         self.assertIn("Published audio available", available)
 
+    def test_quick_reference_filter_includes_secondary_canonical_domains(self):
+        function = {
+            "function_id": "OCF-EXP-001",
+            "title": {"text": "Imagination"},
+            "description": {"text": "A documented purpose."},
+            "categories": [
+                {"id": "experimental", "label": "Experimental"},
+                {"id": "foundation", "label": "Foundation"},
+            ],
+            "primary_category": "experimental",
+            "tags": [],
+            "common_uses": [],
+            "commands": [],
+            "historical_commands": [],
+        }
+        page = _quick_reference([function], {})
+        assert 'data-category="experimental foundation"' in page
+
     def test_recommended_settings_include_loudness_and_speed_controls(self):
         content = _recommended_settings("a" * 40)
         self.assertIn("automatic loudness normalization", content)
