@@ -809,7 +809,7 @@ def _shell(
 <nav class="desktop-nav" aria-label="Main navigation">{links}</nav><details class="mobile-nav"><summary>Menu</summary><nav aria-label="Mobile navigation">{links}</nav></details>
 <button class="theme-toggle" type="button" data-theme-toggle aria-label="Toggle light or dark theme" aria-pressed="false">Theme</button></header>
 <main id="main" class="docs-main">{toc_mobile}<div class="docs-layout{" with-toc" if toc_nav else ""}">{toc_desktop}<article class="{content_class}">{body}</article></div></main>
-<footer class="site-footer"><a class="footer-brand" href="{logo_href}">OCF<span> / AUDIO &amp; GUIDES</span></a><div class="footer-links"><a href="{SITE_REPOSITORY}">Audio site source</a><a href="{SOURCE_REPOSITORY}/tree/{source_commit}">Canonical OCF source at {source_commit[:12]}</a><a href="https://github.com/ocfproject-org/open-consciousness-functions-audio/releases">Published releases</a></div><p>Independent and open source. Not affiliated with The Monroe Institute or Hemi-Sync. Guides do not establish effects, listening approval, or release authorization.</p></footer>
+<footer class="site-footer"><a class="footer-brand" href="{logo_href}">OCF<span> / AUDIO &amp; GUIDES</span></a><div class="footer-links"><a href="{SITE_REPOSITORY}">Audio site source</a><a href="{SOURCE_REPOSITORY}/tree/{source_commit}">Canonical OCF source at {source_commit[:12]}</a><a href="https://github.com/ocfproject-org/open-consciousness-functions-audio/releases">Published releases</a></div><p>Independent documentation and listening library. Audio files remain with their verified published releases.</p></footer>
 </body></html>'''
 
 
@@ -1022,11 +1022,25 @@ def _function_page(function, sessions, transcript_paths, source_commit):
         if release_command
         else "<p>No separate release command is specified.</p>"
     )
-    lifecycle_html = f"""<section class="guide-section"><h2 id="behavior">Lifecycle and behavior</h2><p>Activation: {_html(lifecycle["activation"] or "not specified")}. Intended persistence: {_html(lifecycle["persistence"] or "not specified")}.</p>{scopes_html}{trigger_html}{release_html}<p>These are documented practice semantics, not software sensors, guaranteed effects, or a guarantee that a state starts or continues.</p></section>"""
+    lifecycle_html = f"""<section class="guide-section"><h2 id="behavior">Lifecycle and behavior</h2><p>Activation: {_html(lifecycle["activation"] or "not specified")}. Intended persistence: {_html(lifecycle["persistence"] or "not specified")}.</p>{scopes_html}{trigger_html}{release_html}</section>"""
     safety_html = "".join(
         f"<li>{_html(note)}</li>" for note in function["safety_notes"]
     )
-    safety = f'<section class="guide-section"><h2 id="safety">Precautions</h2><p>Do not listen while driving, operating equipment, or doing anything requiring vigilance. Stop if uncomfortable. This is not healthcare or emergency advice.</p>{f"<ul>{safety_html}</ul>" if safety_html else "<p>No additional function-specific precautions are supplied.</p>"}</section>'
+    general_safety = (
+        "<p>For general comfort and safety guidance, see the "
+        '<a href="../../listening/">Listening Guide</a>.</p>'
+    )
+    specific_safety = (
+        "<p>Function-specific notes:</p><ul>" + safety_html + "</ul>"
+        if safety_html
+        else "<p>No additional function-specific precautions are recorded.</p>"
+    )
+    safety = (
+        '<section class="guide-section"><h2 id="safety">Precautions</h2>'
+        + specific_safety
+        + general_safety
+        + "</section>"
+    )
     session_html = "".join(
         _session_card(row, transcript_paths, site_root_prefix="../../")
         for row in sessions

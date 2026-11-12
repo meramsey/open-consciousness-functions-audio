@@ -153,6 +153,28 @@ class CatalogValidationTests(unittest.TestCase):
             ):
                 validate_site.validate_site()
 
+    def test_relative_website_reference_cannot_escape_staging_root(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            page = root / "functions" / "OCF-FND-001" / "index.html"
+            page.parent.mkdir(parents=True)
+            page.write_text("<main></main>", encoding="utf-8")
+            listening = root / "listening" / "index.html"
+            listening.parent.mkdir(parents=True)
+            listening.write_text("<main></main>", encoding="utf-8")
+            safe_target = validate_site._resolve_local_reference(
+                root,
+                page,
+                "../../listening/",
+            )
+            self.assertEqual(safe_target, (root / "listening" / "index.html").resolve())
+            with self.assertRaisesRegex(ValueError, "escapes site root"):
+                validate_site._resolve_local_reference(
+                    root,
+                    page,
+                    "../../../outside.html",
+                )
+
 
 if __name__ == "__main__":
     unittest.main()
