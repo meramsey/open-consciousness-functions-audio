@@ -357,3 +357,78 @@ routing the owner decision. Reconciliation authorizes only the exact transfer bi
 and acknowledged historical uncertainty; it does not publish. Later final approval
 binds that public bundle/index and successful current-main commits. If any binding
 changes, obtain new scoped approval rather than reusing an earlier decision.
+
+## Authorization continuation contract v3 (private operator records)
+
+Contract v3 is a separate authorization route for the **same originally authorized
+release** after a migration-only hold. It does not reinterpret v2's required
+`accept_unverified_historical_tag_continuity` flag, and it never fills that flag
+on the owner's behalf. The original rights record, public schema-3 envelope,
+historical-receipt-v2 attestation, uncertainty statement and strict v1/v2 validators
+are unchanged. Authorization contract versions and public envelope versions are
+independent domains; matching numbers do not permit substitution.
+
+Three private inputs stay distinct:
+
+- Authenticated instruction context: exact message IDs, original author IDs,
+  source author labels (`user` / `aeon`), text and actual message timestamps.
+  Required roles are original release authorization, artwork rights, migration
+  hold and latest continuation instruction. An optional owner evidence-gap question
+  and assistant disclosure are nonauthorizing; neither constitutes gap acceptance.
+  A native migration observation records stable repository IDs and destination
+  names. Its observation timestamp is not the transfer time and may follow the
+  latest owner instruction. The independently pinned context also contains an exact
+  `release_scope`: repository/release/tag/target, original and destination manifests,
+  original rights, inventory, attestation and uncertainty bindings. A context pin
+  cannot be reused for another otherwise valid release or altered evidence.
+- Operator scope assessment: unchanged original rights and batch, migration-only
+  hold, completed migration, continuation of the original release, no unresolved
+  holds and no contradictory instructions. This is an operator's derivation of
+  existing authority, not a newly invented owner approval of hashes or risks.
+- Operator evidence-gap acknowledgement: historical tag state remains unknown,
+  historical commit API resolution remains unobserved, and
+  `owner_explicit_gap_acceptance` must be false. The exact existing uncertainty
+  digest is bound. This acknowledges the operator's recordkeeping limitation;
+  it does not assert that the owner explicitly accepted it.
+
+An independent authenticated reviewer must inspect the complete relevant history,
+exact message bytes and authors, role classification and scope, later revocations
+or conflicting instructions, and the native migration observation **outside these
+JSON records**. Only after that review may the trusted calling operator supply the
+expected canonical context SHA-256 through a separate trusted channel. Computing
+that expected pin from caller-supplied context at execution time would defeat the
+trust boundary. Matching hashes establish consistency, never authentication or
+natural-language intent. A public registry, arbitrary caller-supplied JSON or a
+pin copied out of the same JSON is not a source of authority. If the history or
+scope is ambiguous, this route must not be used. A later instruction or hold
+invalidates the external trust decision and requires renewed independent review.
+
+`authorization_continuation.verify_reconciliation_v3` validates the private
+reconciliation record. `transfer_finalizer` selects final contract v3 only when
+explicitly supplied a schema-3 final authorization record; otherwise existing v1/v2
+rules remain strict. Both reconciliation and final records bind the context pin,
+repository/release/tag/target, original rights and manifest, destination manifest,
+asset inventory, attestation and uncertainty digests. The final record additionally
+binds the reconciliation record, reviewed public bundle/index, exact CI commits and
+expiry. The same scope and operator acknowledgement are required in both records.
+`recorded_at` is the operator's recording time, distinct from actual message times;
+records contain no fabricated owner `approved_at`. Final authority is explicitly
+`original-release-authority-after-migration-only-hold`.
+
+Pass private context using `--private-instruction-context` and the independently
+obtained pin separately using `--expected-context-sha256`. The high-level validator,
+pre-mutation recheck and native transport each require those separate inputs.
+Missing/wrong pins, changed context, role omissions, unresolved or contradictory
+scope, changed bindings and cross-contract substitution fail closed with generic
+private error messages. No context, message contents, approvals or actual trust
+pins belong in Git, public CI, the registry, PR text or logs.
+
+The v3 receipt and permanent attempt marker bind authorization contract and context.
+All existing current full-byte verification, five-minute freshness, absent-tag,
+fixed target/destination/publisher, exact green current-main CI, clean execution
+checkout, expiry, release-wide writer locking and one-attempt mutation protections
+remain in force. A lost response permits only read-only reconciliation; switching
+contracts, context or receipt paths does not authorize retry. Reconciliation still
+returns publication held; only the separately validated final derivation may reach
+the existing guarded finalization path. This code change creates no real approval,
+registry entry or permission by itself.
