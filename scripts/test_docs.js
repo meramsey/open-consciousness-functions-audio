@@ -7,13 +7,13 @@ const card = {
     search: 'relax plus-relax attention',
     category: 'foundation sleep',
     audio: 'yes',
-    language: 'en-US es-ES',
-    voice: 'Mike Original',
+    language: 'en-US|es-ES',
+    voice: 'Mike — Original Voice',
   },
 };
 assert.equal(normalize('ＰＬＵＳ-ＲＥＬＡＸ'), 'plus-relax');
 assert.equal(matches(card, 'PLUS-RELAX'), true);
-assert.equal(matches(card, '', 'foundation', 'yes', 'en-US', 'Mike'), true);
+assert.equal(matches(card, '', 'foundation', 'yes', 'en-US', 'Mike — Original Voice'), true);
 assert.equal(matches(card, '', 'cognition'), false);
 assert.equal(matches(card, '', '', 'no'), false);
 assert.equal(matches(card, '', '', '', 'fr-FR'), false);

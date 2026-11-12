@@ -6,8 +6,8 @@
     const terms = normalize(query);
     const categoryMatches = !category || (node.dataset.category || '').split(/\s+/).includes(category);
     const audioMatches = !audio || node.dataset.audio === audio;
-    const languageMatches = !language || (node.dataset.language || '').split(/\s+/).includes(language);
-    const voiceMatches = !voice || (node.dataset.voice || '').split(/\s+/).includes(voice);
+    const languageMatches = !language || (node.dataset.language || '').split('|').includes(language);
+    const voiceMatches = !voice || (node.dataset.voice || '').split('|').includes(voice);
     return categoryMatches && audioMatches && languageMatches && voiceMatches && (!terms || normalize(node.dataset.search).includes(terms));
   };
   const safeTranscript = (value, currentURL) => {
