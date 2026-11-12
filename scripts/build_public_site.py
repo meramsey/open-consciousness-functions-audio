@@ -972,6 +972,27 @@ def _public_description(function):
     return text
 
 
+def _spoken_cue_references(text, commands):
+    mappings = sorted(
+        (
+            (command["display_cue"]["text"], command["spoken_cue"])
+            for command in commands
+            if command.get("display_cue", {}).get("text")
+            and command.get("spoken_cue")
+        ),
+        key=lambda mapping: len(mapping[0]),
+        reverse=True,
+    )
+    for display, spoken in mappings:
+        text = re.sub(
+            rf"(?<![\w]){re.escape(display)}(?![\w])",
+            lambda _: spoken,
+            text,
+            flags=re.IGNORECASE,
+        )
+    return text
+
+
 def _function_page(function, sessions, transcript_paths, source_commit):
     categories = " · ".join(
         _html(category["label"]) for category in function["categories"]
@@ -1006,7 +1027,13 @@ def _function_page(function, sessions, transcript_paths, source_commit):
         else:
             procedure_html = '<p class="not-specified">No activation steps are specified. Do not infer a procedure from the cue name.</p>'
         usage_html = (
-            "<p>" + _html(command["usage"]["text"]) + "</p>"
+            "<p>"
+            + _html(
+                _spoken_cue_references(
+                    command["usage"]["text"], function["commands"]
+                )
+            )
+            + "</p>"
             if command.get("usage")
             and command["usage"]["text"]
             != "Use only when you choose to activate the documented function."

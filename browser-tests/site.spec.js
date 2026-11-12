@@ -59,6 +59,23 @@ test('Sleep has no duplicate step or generic command filler, while distinct guid
   expect(await page.locator('#safety').evaluate(element => element.parentElement.textContent)).not.toBe('');
 });
 
+test('Insulate hold guidance uses the approved spoken Cancel cue, including copy/accessibility', async ({ page }) => {
+  await page.goto('/functions/OCF-EXP-002/');
+  const cancelCopy = page.getByRole('button', { name: 'Copy cue: Plus Cancel' });
+  const cancelCommand = page.locator('.command-block').filter({ has: cancelCopy });
+  await expect(cancelCommand).toHaveCount(1);
+  await expect(cancelCommand.locator('.spoken-cue strong')).toHaveText('Plus Cancel');
+  await expect(cancelCopy).toHaveAttribute('data-copy', 'Plus Cancel');
+  await expect(cancelCopy).toHaveAttribute('aria-label', 'Copy cue: Plus Cancel');
+
+  const releaseCopy = page.getByRole('button', { name: 'Copy cue: Plus Release' });
+  const releaseCommand = page.locator('.command-block').filter({ has: releaseCopy });
+  await expect(releaseCommand).toHaveCount(1);
+  const guidance = await releaseCommand.innerText();
+  expect(guidance).toContain('Places Insulate on hold; Plus Cancel ends the current adjustment.');
+  expect(guidance).not.toContain('PLUS-CANCEL');
+});
+
 test('Quick Reference filters, keyboard controls, narrow widths, print, themes, transcript and deep links work', async ({ page, browserName }) => {
   for (const width of [375, 768, 1024, 1440]) {
     await page.setViewportSize({ width, height: 900 });

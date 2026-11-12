@@ -42,6 +42,7 @@ node scripts/test_catalog.js
 node scripts/test_docs.js
 npm ci
 npx playwright install chromium firefox webkit
+npm run test:browser:guard
 npm run test:browser
 ```
 
@@ -52,8 +53,11 @@ checks spoken-only cues and copy names, inactive-cue exclusion, the Sleep
 procedure, keyboard navigation, filters, deep links, themes, transcripts,
 responsive widths and a printed Quick Reference PDF. An injected unlabeled
 button is a negative accessibility regression: the same axe gate must reject
-it. In Pages, this command runs before `verified-site` is uploaded; the deploy
-job depends on the complete validation job. A browser or axe test failure
+it. A separate negative server regression starts a test-owned service on port
+4173 and confirms Playwright rejects it rather than reusing it; if that port is
+already occupied before the test starts, the test fails without terminating
+the existing listener. In Pages, these checks run before `verified-site` is
+uploaded; the deploy job depends on the complete validation job. A browser or axe test failure
 therefore fails validation and prevents deployment. The public-safe browser
 artifact includes test results, a print PDF and an acceptance receipt bound to
 the pinned source commit, PR head (or pushed audio commit), exact CI-tested

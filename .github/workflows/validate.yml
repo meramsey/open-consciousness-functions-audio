@@ -62,6 +62,9 @@ jobs:
       - name: Install Chromium for browser/accessibility gate
         if: matrix.os == 'ubuntu-latest' && matrix.python == '3.12'
         run: npx playwright install --with-deps chromium
+      - name: Verify Playwright rejects a preoccupied server port
+        if: matrix.os == 'ubuntu-latest' && matrix.python == '3.12'
+        run: npm run test:browser:guard
       - name: Test the generated site in Chromium and axe-core
         if: matrix.os == 'ubuntu-latest' && matrix.python == '3.12'
         env:

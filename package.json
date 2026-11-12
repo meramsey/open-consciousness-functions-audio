@@ -3,7 +3,8 @@
   "version": "1.0.0",
   "private": true,
   "scripts": {
-    "test:browser": "playwright test"
+    "test:browser": "playwright test",
+    "test:browser:guard": "node scripts/test_browser_server_guard.js"
   },
   "devDependencies": {
     "@playwright/test": "1.65.0",

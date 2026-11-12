@@ -18,6 +18,7 @@ from build_public_site import (
     _quick_reference,
     _recommended_settings,
     _request_public_asset,
+    _spoken_cue_references,
     digest,
     fetch_transcript,
     validate_guide_export,
@@ -25,6 +26,24 @@ from build_public_site import (
 
 
 class PublicSiteBuildTests(unittest.TestCase):
+    def test_spoken_cue_reference_replaces_only_the_approved_whole_cue(self):
+        commands = [
+            {
+                "display_cue": {"text": "PLUS-CANCEL"},
+                "spoken_cue": "Plus Cancel",
+            }
+        ]
+        usage = "Places Insulate on hold; PLUS-CANCEL ends this adjustment."
+        self.assertEqual(
+            _spoken_cue_references(usage, commands),
+            "Places Insulate on hold; Plus Cancel ends this adjustment.",
+        )
+        self.assertEqual(
+            _spoken_cue_references("PLUS-CANCELLED is not PLUS-CANCEL", commands),
+            "PLUS-CANCELLED is not Plus Cancel",
+        )
+        self.assertEqual(usage, "Places Insulate on hold; PLUS-CANCEL ends this adjustment.")
+
     def test_public_description_removes_only_matching_display_cue_suffix(self):
         function = {
             "description": {
