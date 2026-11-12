@@ -89,6 +89,10 @@ test('Start Here renders the approved suggestion as an ordered list and presents
   expect(text).toContain('separate introductory session, not one of the 58 function records');
   expect(text).toContain('not a required sequence');
   await noAxeViolations(page);
+  await page.goto('/');
+  const quickPath = page.locator('.path-card[href="quick-reference/"]');
+  await expect(quickPath).toContainText('current spoken cues');
+  await expect(quickPath).not.toContainText('display/spoken');
 });
 
 test('historical names appear only in their source-authoritative lookup page', async ({ page }) => {
