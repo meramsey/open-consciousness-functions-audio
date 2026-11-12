@@ -14,9 +14,13 @@ from build_public_site import (
     _asset_specification,
     _catalog_sessions,
     _inline,
+    _public_description,
     _quick_reference,
     _recommended_settings,
     _request_public_asset,
+    _suggested_download_filename,
+    _validate_suggested_download_filenames,
+    _spoken_cue_references,
     digest,
     fetch_transcript,
     validate_guide_export,
@@ -24,6 +28,83 @@ from build_public_site import (
 
 
 class PublicSiteBuildTests(unittest.TestCase):
+    def test_spoken_cue_reference_replaces_only_the_approved_whole_cue(self):
+        commands = [
+            {
+                "display_cue": {"text": "PLUS-CANCEL"},
+                "spoken_cue": "Plus Cancel",
+            }
+        ]
+        usage = "Places Insulate on hold; PLUS-CANCEL ends this adjustment."
+        self.assertEqual(
+            _spoken_cue_references(usage, commands),
+            "Places Insulate on hold; Plus Cancel ends this adjustment.",
+        )
+        self.assertEqual(
+            _spoken_cue_references("PLUS-CANCELLED is not PLUS-CANCEL", commands),
+            "PLUS-CANCELLED is not Plus Cancel",
+        )
+        self.assertEqual(usage, "Places Insulate on hold; PLUS-CANCEL ends this adjustment.")
+
+    def test_suggested_download_filename_is_descriptive_safe_and_hash_free(self):
+        suggested = _suggested_download_filename(
+            {"function_id": "OCF-FND-004"},
+            {
+                "title": "Relax / Recover",
+                "locale": "en-US",
+                "voice_name": "Mike: Original Voice",
+                "edition": "0.1.0",
+            },
+            {"tag": "audio-0.1.0-release"},
+            {"format": "MP3", "filename": "release-abcdef123456.mp3"},
+        )
+        self.assertEqual(
+            suggested,
+            "OCF-FND-004 - Relax - Recover - en-US - Mike- Original Voice - v0.1.0 - audio-0.1.0-release.mp3",
+        )
+        self.assertNotIn("abcdef123456", suggested)
+        self.assertNotRegex(suggested, r'[<>:"/\\|?*\x00-\x1f]')
+        with self.assertRaisesRegex(ValueError, "unsupported suggested-download extension"):
+            _suggested_download_filename(
+                {"function_id": "OCF-FND-004"},
+                {"title": "Relax", "locale": "en-US", "voice_name": "Voice", "edition": "0.1"},
+                {"tag": "release"},
+                {"format": "../../mp3"},
+            )
+
+    def test_suggested_audio_filename_collision_fails_closed(self):
+        row = {
+            "group": {"function_id": "OCF-FND-004", "title": "Relax"},
+            "session": {
+                "title": "Relax",
+                "locale": "en-US",
+                "voice_name": "Mike",
+                "edition": "0.1.0",
+            },
+            "release": {"tag": "audio-0.1.0"},
+            "audio_assets": [
+                {"asset_id": "asset-one", "format": "mp3"},
+                {"asset_id": "asset-two", "format": "MP3"},
+            ],
+        }
+        with self.assertRaisesRegex(ValueError, "share a suggested local filename"):
+            _validate_suggested_download_filenames([row])
+
+    def test_public_description_removes_only_matching_display_cue_suffix(self):
+        function = {
+            "description": {
+                "text": "Sleep deliberately; activation cue PLUS-SLEEP.",
+            },
+            "commands": [
+                {"display_cue": {"text": "PLUS-SLEEP"}},
+            ],
+        }
+        original = copy.deepcopy(function)
+        self.assertEqual(_public_description(function), "Sleep deliberately")
+        function["description"]["text"] = "Use PLUS-SLEEP safely."
+        self.assertEqual(_public_description(function), "Use PLUS-SLEEP safely.")
+        self.assertEqual(original["description"]["text"], "Sleep deliberately; activation cue PLUS-SLEEP.")
+
     @staticmethod
     def valid_pin():
         return {

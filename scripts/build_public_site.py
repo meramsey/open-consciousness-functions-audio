@@ -497,6 +497,7 @@ def build_public_site(
     all_session_rows = [
         row for rows in sessions_by_function.values() for row in rows
     ] + preparation_sessions
+    _validate_suggested_download_filenames(all_session_rows)
     with tempfile.TemporaryDirectory(
         prefix="ocf-site-build-", dir=output.parent
     ) as staging_name:
@@ -647,17 +648,13 @@ def build_public_site(
                 {
                     "function_id": row["function_id"],
                     "title": row["title"]["text"],
-                    "description": row["description"]["text"],
+                    "description": _public_description(row),
                     "primary_category": row["primary_category"],
                     "categories": [category["id"] for category in row["categories"]],
                     "cues": [
-                        cue
+                        command["spoken_cue"]
                         for command in row["commands"]
-                        for cue in (
-                            command["display_cue"]["text"],
-                            command.get("spoken_cue"),
-                        )
-                        if cue
+                        if command.get("spoken_cue")
                     ],
                     "search_terms": [
                         item["text"] for item in row["tags"] + row["common_uses"]
@@ -832,9 +829,9 @@ def _shell(
 <title>{_html(title)}</title><link rel="icon" href="{base}assets/favicon.svg" type="image/svg+xml"><link rel="stylesheet" href="{base}assets/css/main.css"><link rel="stylesheet" href="{base}assets/css/website.css">
 {catalog_script}{docs_script}</head><body>
 <a class="skip-link" href="#main">Skip to content</a>
-<header class="site-header docs-header"><a class="brand" href="{logo_href}" aria-label="Open Consciousness Functions home"><span class="brand-mark" aria-hidden="true">OCF</span><span class="brand-name">Open Consciousness Functions<small>Audio and Guides</small></span></a>
+<header class="site-header docs-header"><a class="brand" href="{logo_href}"><span class="brand-mark" aria-hidden="true">OCF</span><span class="brand-name">Open Consciousness Functions<small>Audio and Guides</small></span></a>
 <nav class="desktop-nav" aria-label="Main navigation">{links}</nav><details class="mobile-nav"><summary>Menu</summary><nav aria-label="Mobile navigation">{links}</nav></details>
-<button class="theme-toggle" type="button" data-theme-toggle aria-label="Toggle light or dark theme" aria-pressed="false">Theme</button></header>
+<button class="theme-toggle" type="button" data-theme-toggle aria-pressed="false">Theme</button></header>
 <main id="main" class="docs-main">{toc_mobile}<div class="docs-layout{" with-toc" if toc_nav else ""}">{toc_desktop}<article class="{content_class}">{body}</article></div></main>
 <footer class="site-footer"><a class="footer-brand" href="{logo_href}">OCF<span> / AUDIO &amp; GUIDES</span></a><div class="footer-links"><a href="{SITE_REPOSITORY}">Audio site source</a><a href="{SOURCE_REPOSITORY}/tree/{source_commit}">Canonical OCF source at {source_commit[:12]}</a><a href="https://github.com/ocfproject-org/open-consciousness-functions-audio/releases">Published releases</a></div><p>Independent documentation and listening library. Audio files remain with their verified published releases.</p></footer>
 </body></html>'''
@@ -923,19 +920,12 @@ def _functions_index(functions, sessions_by_function):
             function["function_id"],
             function["slug"],
             function["title"]["text"],
-            function["description"]["text"],
+            _public_description(function),
         ]
-        search.extend(
-            command["display_cue"]["text"] for command in function["commands"]
-        )
         search.extend(
             command["spoken_cue"]
             for command in function["commands"]
             if command.get("spoken_cue")
-        )
-        search.extend(
-            command["display_cue"]["text"]
-            for command in function["historical_commands"]
         )
         search.extend(
             item["text"] for item in function["tags"] + function["common_uses"]
@@ -948,7 +938,7 @@ def _functions_index(functions, sessions_by_function):
             {row["session"].get("voice_name", "") for row in sessions}
         )
         cards_by_domain.setdefault(function["primary_category"], []).append(
-            f'''<article class="function-card" data-function-card data-category="{_html(" ".join(sorted(categories)))}" data-audio="{"yes" if sessions else "no"}" data-language="{_html("|".join(function_languages))}" data-voice="{_html("|".join(function_voices))}" data-search="{_html(" ".join(search).casefold())}"><p class="eyebrow">{_html(function["primary_category"])} · {function["function_id"]}</p><h2><a href="{_html(function["function_id"])}/">{_html(function["title"]["text"])}</a></h2><p>{_html(function["description"]["text"])}</p><p class="function-status">Documentation available · {"Published audio available" if sessions else "No published audio in current catalog"}</p><a class="text-link" href="{_html(function["function_id"])}/">Read documented instructions <span aria-hidden="true">→</span></a></article>'''
+            f'''<article class="function-card" data-function-card data-category="{_html(" ".join(sorted(categories)))}" data-audio="{"yes" if sessions else "no"}" data-language="{_html("|".join(function_languages))}" data-voice="{_html("|".join(function_voices))}" data-search="{_html(" ".join(search).casefold())}"><p class="eyebrow">{_html(function["primary_category"])} · {function["function_id"]}</p><h2><a href="{_html(function["function_id"])}/">{_html(function["title"]["text"])}</a></h2><p>{_html(_public_description(function))}</p><p class="function-status">Documentation available · {"Published audio available" if sessions else "No published audio in current catalog"}</p><a class="text-link" href="{_html(function["function_id"])}/">Read documented instructions <span aria-hidden="true">→</span></a></article>'''
         )
     groups = "".join(
         f'<section class="domain-group" data-domain-group="{_html(category["id"])}"><h2>{_html(category["label"])}</h2><div class="function-grid" data-function-grid>{"".join(cards_by_domain.get(category["id"], []))}</div></section>'
@@ -966,6 +956,44 @@ def _unique_categories(functions):
     return [{"id": key, "label": values[key]} for key in sorted(values)]
 
 
+def _public_description(function):
+    text = function["description"]["text"]
+    display_cues = [
+        re.escape(command["display_cue"]["text"])
+        for command in function["commands"]
+        if command.get("display_cue", {}).get("text")
+    ]
+    if display_cues:
+        text = re.sub(
+            rf";\s*activation cue\s+(?:{'|'.join(display_cues)})[.!?]?\s*$",
+            "",
+            text,
+            flags=re.IGNORECASE,
+        )
+    return text
+
+
+def _spoken_cue_references(text, commands):
+    mappings = sorted(
+        (
+            (command["display_cue"]["text"], command["spoken_cue"])
+            for command in commands
+            if command.get("display_cue", {}).get("text")
+            and command.get("spoken_cue")
+        ),
+        key=lambda mapping: len(mapping[0]),
+        reverse=True,
+    )
+    for display, spoken in mappings:
+        text = re.sub(
+            rf"(?<![\w]){re.escape(display)}(?![\w])",
+            lambda _: spoken,
+            text,
+            flags=re.IGNORECASE,
+        )
+    return text
+
+
 def _function_page(function, sessions, transcript_paths, source_commit):
     categories = " · ".join(
         _html(category["label"]) for category in function["categories"]
@@ -975,15 +1003,23 @@ def _function_page(function, sessions, transcript_paths, source_commit):
     ) + _discovery_section("Common-use examples", function["common_uses"])
     command_sections = []
     for command in function["commands"]:
-        cue = command["display_cue"]
-        spoken = (
-            f'<p class="spoken-cue"><span class="field-label">Spoken cue</span> <strong>{_html(command["spoken_cue"])}</strong></p>'
-            if command.get("spoken_cue")
-            else '<p class="not-specified">No reviewed spoken cue is available for this command.</p>'
+        spoken_cue = command.get("spoken_cue", "").strip()
+        if not spoken_cue:
+            raise ValueError(
+                f"{function['function_id']}/{command['command_id']} has no spoken cue"
+            )
+        spoken = _html(spoken_cue)
+        spoken_html = (
+            f'<p class="spoken-cue"><strong>{spoken}</strong>'
+            f'<button type="button" class="copy-cue" data-copy="{_html(spoken_cue)}" aria-label="Copy cue: {spoken}">Copy cue</button></p>'
         )
+        visible_steps = []
+        for step in command["procedure_steps"]:
+            current = (step["operation"], step["instruction"])
+            if not visible_steps or visible_steps[-1] != current:
+                visible_steps.append(current)
         steps = "".join(
-            f"<li>{_html(step['instruction'])}</li>"
-            for step in command["procedure_steps"]
+            f"<li>{_html(instruction)}</li>" for _, instruction in visible_steps
         )
         if command["procedure_status"] == "documented":
             procedure_html = f"<ol>{steps}</ol>"
@@ -992,13 +1028,23 @@ def _function_page(function, sessions, transcript_paths, source_commit):
         else:
             procedure_html = '<p class="not-specified">No activation steps are specified. Do not infer a procedure from the cue name.</p>'
         usage_html = (
-            "<p>" + _html(command["usage"]["text"]) + "</p>"
+            "<p>"
+            + _html(
+                _spoken_cue_references(
+                    command["usage"]["text"], function["commands"]
+                )
+            )
+            + "</p>"
             if command.get("usage")
+            and command["usage"]["text"]
+            != "Use only when you choose to activate the documented function."
             else ""
         )
         explanation_html = (
             "<p>" + _html(command["explanation"]["text"]) + "</p>"
             if command.get("explanation")
+            and command["explanation"]["text"]
+            != "This is the primary command for the function."
             else ""
         )
         scope_html = (
@@ -1009,17 +1055,8 @@ def _function_page(function, sessions, transcript_paths, source_commit):
             else ""
         )
         command_sections.append(
-            f'''<section class="command-block"><h3>{"Primary activation" if command["designation"] == "primary" else "Secondary command"} <span class="stable-id">{_html(command["command_id"])}</span></h3><p class="display-cue"><span class="field-label">Display cue</span> <strong>{_html(cue["text"])}</strong><button type="button" class="copy-cue" data-copy="{_html(cue["text"])}">Copy cue</button></p>{spoken}{usage_html}{explanation_html}<h4>Documented activation steps</h4>{procedure_html}{scope_html}</section>'''
+            f'''<section class="command-block"><h3>{"Primary activation" if command["designation"] == "primary" else "Secondary command"}</h3>{spoken_html}{usage_html}{explanation_html}<h4>Documented activation steps</h4>{procedure_html}{scope_html}</section>'''
         )
-    historical = "".join(
-        f'<li><strong>{_html(command["display_cue"]["text"])}</strong> <span class="stable-id">{_html(command["command_id"])}</span> — Historical/inactive alias; not a current activation command.</li>'
-        for command in function["historical_commands"]
-    )
-    historical_html = (
-        f'<details class="historical-commands"><summary>Historical and inactive cues ({len(function["historical_commands"])})</summary><p>These aliases are retained for historical lookup and are not promoted as active commands.</p><ul>{historical}</ul></details>'
-        if historical
-        else ""
-    )
     scope_rows = []
     for scope in function["lifecycle"]["scopes"]:
         description = (
@@ -1037,7 +1074,7 @@ def _function_page(function, sessions, transcript_paths, source_commit):
     scopes_html = (
         "<ul>" + "".join(scope_rows) + "</ul>"
         if scope_rows
-        else "<p>No additional lifecycle scopes are declared.</p>"
+        else ""
     )
     lifecycle = function["lifecycle"]
     trigger_text = "; ".join(lifecycle["trigger_conditions"])
@@ -1052,7 +1089,7 @@ def _function_page(function, sessions, transcript_paths, source_commit):
         + _html(release_command)
         + "</strong></p>"
         if release_command
-        else "<p>No separate release command is specified.</p>"
+        else ""
     )
     lifecycle_html = f"""<section class="guide-section"><h2 id="behavior">Lifecycle and behavior</h2><p>Activation: {_html(lifecycle["activation"] or "not specified")}. Intended persistence: {_html(lifecycle["persistence"] or "not specified")}.</p>{scopes_html}{trigger_html}{release_html}</section>"""
     safety_html = "".join(
@@ -1091,7 +1128,7 @@ def _function_page(function, sessions, transcript_paths, source_commit):
     breadcrumb = f'<nav class="breadcrumbs" aria-label="Breadcrumb"><a href="../../">Home</a> / <a href="../">Functions</a> / {_html(function["title"]["text"])}</nav>'
     return (
         breadcrumb
-        + f'''<header class="page-intro" data-function-id="{_html(function["function_id"])}"><p class="eyebrow">{_html(function["function_id"])} · {_html(categories)}</p><h1>{_html(function["title"]["text"])}</h1><p class="lead">{_html(function["description"]["text"])}</p><p class="status-line">Title: {_html(function["title"]["status"])} · Description: {_html(function["description"]["status"])}</p></header><section class="guide-section"><h2 id="overview">Intended purpose</h2><p>{_html(function["description"]["text"])}</p>{terms}<p class="source-link">Canonical function source: <a href="{SOURCE_REPOSITORY}/tree/{source_commit}/{_html(function["canonical_resource"])}">this locale resource at pinned commit {source_commit[:12]}</a>.</p></section><section class="guide-section"><h2 id="cues">Cues and documented instructions</h2><p>Display cues and spoken cues are different fields. Saying a cue alone does not replace these steps.</p>{"".join(command_sections)}{historical_html}</section>{lifecycle_html}{safety}<section class="guide-section"><h2 id="listening">Published audio editions</h2><p>Audio availability, voice and transcript are edition-specific. Only release-manifest assets are listed here.</p>{session_html}</section><section class="guide-section"><h2 id="related">Approved related functions</h2><ul class="relationship-list">{related_html}</ul><p>These links are optional and directional. They are not prerequisites or claims of combined effect.</p></section>'''
+        + f'''<header class="page-intro" data-function-id="{_html(function["function_id"])}"><p class="eyebrow">{_html(function["function_id"])} · {_html(categories)}</p><h1>{_html(function["title"]["text"])}</h1><p class="lead">{_html(_public_description(function))}</p><p class="status-line">Title: {_html(function["title"]["status"])} · Description: {_html(function["description"]["status"])}</p></header><section class="guide-section"><h2 id="overview">Intended purpose</h2><p>{_html(_public_description(function))}</p>{terms}<p class="source-link">Canonical function source: <a href="{SOURCE_REPOSITORY}/tree/{source_commit}/{_html(function["canonical_resource"])}">this locale resource at pinned commit {source_commit[:12]}</a>.</p></section><section class="guide-section"><h2 id="cues">Cues and documented instructions</h2>{"".join(command_sections)}</section>{lifecycle_html}{safety}<section class="guide-section"><h2 id="listening">Published audio editions</h2><p>Audio availability, voice and transcript are edition-specific. Only release-manifest assets are listed here.</p>{session_html}</section><section class="guide-section"><h2 id="related">Approved related functions</h2><ul class="relationship-list">{related_html}</ul><p>These links are optional and directional. They are not prerequisites or claims of combined effect.</p></section>'''
     )
 
 
@@ -1135,6 +1172,9 @@ def _session_card(row, transcript_paths, *, site_root_prefix="../../"):
         )
     for asset in row["audio_assets"]:
         fmt = asset["format"].upper()
+        suggested_filename = _suggested_download_filename(
+            row["group"], session, release, asset
+        )
         size = (
             f"{asset.get('size_bytes', 0) / 1048576:.1f} MiB"
             if asset.get("size_bytes")
@@ -1147,7 +1187,7 @@ def _session_card(row, transcript_paths, *, site_root_prefix="../../"):
         )
         specification_text = _asset_specification(asset, size=size, duration=duration)
         audio.append(
-            f'<p class="asset-download"><a href="{_html(asset["download_url"])}" download>Download {fmt}</a> <span>{_html(specification_text)}</span> <details><summary>Checksum</summary><code>{_html(asset["sha256"])}</code></details></p>'
+            f'''<div class="asset-download" data-download-format="{_html(asset["format"])}"><div class="download-actions"><a class="download-link" href="{_html(asset["download_url"])}" download="{_html(suggested_filename)}">Download {fmt}</a><button type="button" class="copy-filename" data-copy="{_html(suggested_filename)}" aria-label="Copy name: {_html(suggested_filename)}">Copy name</button></div><p class="download-specification">{_html(specification_text)}</p><p class="download-name-note">Suggested local filename: <code>{_html(suggested_filename)}</code>. The release server may use its own filename; if so, rename the downloaded file locally. Audio is downloaded directly and is not buffered by this page.</p><details><summary>Checksum</summary><code>{_html(asset["sha256"])}</code></details></div>'''
         )
     transcript_controls = []
     for fmt, label in (("txt", "Read transcript"), ("vtt", "Download timed subtitles")):
@@ -1207,6 +1247,44 @@ def _asset_specification(asset, *, size=None, duration=None):
     return " · ".join(value for value in specifications if value)
 
 
+def _suggested_download_filename(group, session, release, asset):
+    extension = str(asset.get("format", "")).casefold()
+    if not re.fullmatch(r"[a-z0-9]{1,8}", extension):
+        raise ValueError(f"unsupported suggested-download extension: {extension!r}")
+    identity = group.get("function_id") or "Preparation"
+    values = (
+        identity,
+        session.get("title") or group.get("title") or "Session",
+        session["locale"],
+        session["voice_name"],
+        f"v{session['edition']}",
+        release["tag"],
+    )
+    parts = [
+        re.sub(r"\s+", " ", re.sub(r'[\x00-\x1f<>:"/\\|?*]+', "-", str(value)))
+        .strip(" .-")
+        for value in values
+    ]
+    return " - ".join(part for part in parts if part) + f".{extension}"
+
+
+def _validate_suggested_download_filenames(session_rows):
+    seen = {}
+    for row in session_rows:
+        for asset in row["audio_assets"]:
+            filename = _suggested_download_filename(
+                row["group"], row["session"], row["release"], asset
+            )
+            key = filename.casefold()
+            if key in seen:
+                previous = seen[key]
+                raise ValueError(
+                    "published audio assets share a suggested local filename: "
+                    f"{previous['function_id']} and {row['group'].get('function_id', 'preparation')} / {filename}"
+                )
+            seen[key] = {"function_id": row["group"].get("function_id", "preparation")}
+
+
 def _quick_reference(functions, sessions_by_function):
     rows = []
     for function in functions:
@@ -1214,33 +1292,30 @@ def _quick_reference(functions, sessions_by_function):
         searchable = [
             function["function_id"],
             function["title"]["text"],
-            function["description"]["text"],
+            _public_description(function),
         ]
         searchable.extend(
             term["text"] for term in function["tags"] + function["common_uses"]
         )
         for command in function["commands"]:
-            searchable.append(command["display_cue"]["text"])
             spoken = command.get("spoken_cue")
-            if spoken:
-                searchable.append(spoken)
+            if not spoken:
+                raise ValueError(
+                    f"{function['function_id']}/{command['command_id']} has no spoken cue"
+                )
+            searchable.append(spoken)
             cue_rows.append(
-                f'<li><span class="cue-role">{_html("Primary" if command["designation"] == "primary" else "Secondary")}</span> <strong>{_html(command["display_cue"]["text"])}</strong>{f" <span class=spoken-cue>“{_html(spoken)}”</span>" if spoken else " <span class=not-specified>Spoken cue not supplied as reviewed text.</span>"}<button type="button" class="copy-cue" data-copy="{_html(command["display_cue"]["text"])}">Copy</button></li>'
+                f'<li><span class="cue-role">{_html("Primary" if command["designation"] == "primary" else "Secondary")}</span> <strong>{_html(spoken)}</strong><button type="button" class="copy-cue" data-copy="{_html(spoken)}" aria-label="Copy: {_html(spoken)}">Copy</button></li>'
             )
-        for command in function["historical_commands"]:
-            cue_rows.append(
-                f'<li class="historical-cue"><span class="cue-role">Historical / inactive</span> <strong>{_html(command["display_cue"]["text"])}</strong> <span class="not-specified">Not a current command.</span></li>'
-            )
-            searchable.append(command["display_cue"]["text"])
         category = function["primary_category"]
         rows.append(
-            f'<tr data-reference-row data-search="{_html(" ".join(searchable).casefold())}" data-category="{_html(" ".join(category["id"] for category in function["categories"]))}"><th scope="row"><a href="../functions/{_html(function["function_id"])}/">{_html(function["title"]["text"])}</a><span class="stable-id">{_html(function["function_id"])}</span><span class="category-chip">{_html(category)}</span></th><td><ul>{"".join(cue_rows)}</ul></td><td>{_html(function["description"]["text"])}</td><td>{"Published audio available" if sessions_by_function.get(function["function_id"]) else "Audio unavailable"}</td></tr>'
+            f'<tr data-reference-row data-search="{_html(" ".join(searchable).casefold())}" data-category="{_html(" ".join(category["id"] for category in function["categories"]))}"><th scope="row"><a href="../functions/{_html(function["function_id"])}/">{_html(function["title"]["text"])}</a><span class="stable-id">{_html(function["function_id"])}</span><span class="category-chip">{_html(category)}</span></th><td><ul>{"".join(cue_rows)}</ul></td><td>{_html(_public_description(function))}</td><td>{"Published audio available" if sessions_by_function.get(function["function_id"]) else "Audio unavailable"}</td></tr>'
         )
     options = "".join(
         f'<option value="{_html(item["id"])}">{_html(item["label"])}</option>'
         for item in _unique_categories(functions)
     )
-    return f"""<header class="page-intro"><p class="eyebrow">Find exact canonical cues</p><h1>Quick Reference</h1><p>Display and spoken cues are distinct. A cue identifies a command; use the function's documented steps rather than inferring a procedure from its name.</p></header><div class="reference-tools"><label for="reference-search">Search title, ID, cue, tag or use</label><input id="reference-search" type="search" data-reference-search><label for="reference-category">Canonical domain</label><select id="reference-category" data-reference-category><option value="">All domains</option>{options}</select><output data-reference-count aria-live="polite">58 functions</output></div><div class="table-scroll"><table class="reference-table"><thead><tr><th scope="col">Function</th><th scope="col">Current and historical cues</th><th scope="col">Description</th><th scope="col">Audio availability</th></tr></thead><tbody>{"".join(rows)}</tbody></table></div>"""
+    return f"""<header class="page-intro"><p class="eyebrow">Approved spoken cues</p><h1>Quick Reference</h1><p>Find a spoken cue; use the function's documented steps rather than inferring a procedure from its name.</p></header><div class="reference-tools"><label for="reference-search">Search title, ID, spoken cue, tag or use</label><input id="reference-search" type="search" data-reference-search><label for="reference-category">Canonical domain</label><select id="reference-category" data-reference-category><option value="">All domains</option>{options}</select><output data-reference-count aria-live="polite">58 functions</output></div><div class="table-scroll"><table class="reference-table"><thead><tr><th scope="col">Function</th><th scope="col">Current spoken cues</th><th scope="col">Description</th><th scope="col">Audio availability</th></tr></thead><tbody>{"".join(rows)}</tbody></table></div>"""
 
 
 def _relationships_page(functions):

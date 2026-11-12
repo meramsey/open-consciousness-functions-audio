@@ -30,6 +30,7 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
+          cache: npm
       - name: Resolve pinned OCF source commit
         id: source
         shell: bash
@@ -80,6 +81,22 @@ jobs:
             --catalog verified-catalog.json \
             --output verified-site
       - run: python scripts/validate_site.py verified-site
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      - name: Verify Playwright rejects a preoccupied server port
+        run: npm run test:browser:guard
+      - name: Run browser and accessibility acceptance on the exact build
+        env:
+          AUDIO_HEAD_SHA: ${{ github.sha }}
+        run: npm run test:browser
+      - name: Retain public-safe browser acceptance evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: browser-acceptance
+          path: browser-artifacts/
+          if-no-files-found: ignore
+          retention-days: 30
       - uses: actions/upload-artifact@v4
         with:
           name: verified-site
