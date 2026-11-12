@@ -169,6 +169,40 @@ class ContinuationTests(unittest.TestCase):
             ]
         )
 
+    def test_verbatim_message_whitespace_preserved_and_pin_bound(self):
+        self.context["messages"][-1]["text"] = (
+            "  Synthetic first line.\nSecond line.\t\r\n "
+        )
+        self.pin = identity(self.context)
+        self.reconciliation, self.final = records(
+            self.bundle, self.registry, self.original, self.pin
+        )
+        frozen = canonical_bytes(self.context)
+        self.run_finalizer(False)
+        self.assertEqual(canonical_bytes(self.context), frozen)
+        self.context["messages"][-1]["text"] = self.context["messages"][-1][
+            "text"
+        ].strip()
+        with self.assertRaises(ValueError):
+            self.run_finalizer(False)
+
+    def test_blank_or_control_message_bodies_rejected_even_with_matching_pin(self):
+        for body in (
+            " \t\r\n",
+            "Synthetic\x00body",
+            "Synthetic\x1bbody",
+            "Synthetic\x7fbody",
+            1,
+        ):
+            with self.subTest(body_type=type(body).__name__):
+                self.context["messages"][-1]["text"] = body
+                self.pin = identity(self.context)
+                self.reconciliation, self.final = records(
+                    self.bundle, self.registry, self.original, self.pin
+                )
+                with self.assertRaises(ValueError):
+                    self.run_finalizer(False)
+
     def test_missing_wrong_or_self_supplied_pin_fails_before_network(self):
         for pin in (None, "f" * 64, self.context, True):
             with (
