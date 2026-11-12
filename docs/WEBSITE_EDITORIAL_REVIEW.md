@@ -6,8 +6,10 @@
   Listening Guide, Functions, Quick Reference, Related Functions, Downloads,
   and About paths while retaining direct access to the verified audio library.
 - Added short introduction copy and separately labeled instruction, lifecycle,
-  safety, audio, and relationship sections. Added purposeful headings, section
-  navigation, breadcrumb links, and prominent cue styling.
+  function-specific precaution, audio, and relationship sections. General
+  listening safety is linked once to the listening guide rather than repeated
+  on every function page. Added purposeful headings, section navigation,
+  breadcrumb links, and prominent cue styling.
 - Added optional beginner exploration descriptions for Relax, Focus, and Think
   Fast. The wording explicitly states that these are independent practices and
   not a mandatory progression.
