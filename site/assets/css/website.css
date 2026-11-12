@@ -124,7 +124,7 @@ body { min-width: 320px; }
 
 @media (max-width: 760px) {
   .site-header { min-height: 72px; height: auto; flex-wrap: wrap; align-items: center; padding: .7rem 5%; }
-  .desktop-nav { display: none; }
+  .site-header nav.desktop-nav { display: none; }
   .mobile-nav { display: block; margin-left: auto; font-size: .85rem; }
   .mobile-nav summary { cursor: pointer; padding: .45rem .7rem; border: 1px solid var(--line); }
   .mobile-nav nav { display: grid; gap: .65rem; position: absolute; right: 5%; z-index: 5; min-width: 13rem; padding: 1rem; background: var(--card); border: 1px solid var(--line); box-shadow: 0 1rem 2rem #0002; }
