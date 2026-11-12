@@ -37,4 +37,6 @@ published edition when the release supplies one.
 
 Check the player's speed, repeat, shuffle, crossfade, normalization, EQ, and
 enhancements. If sound seems mono, verify the output device and balance before
-changing volume. Do not increase volume beyond a comfortable level.
+changing volume. For current output-device troubleshooting steps, see
+[Microsoft's Windows sound and audio guide](https://support.microsoft.com/en-us/windows/hardware/audio/fix-sound-or-audio-problems-in-windows).
+Do not increase volume beyond a comfortable level.
