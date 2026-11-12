@@ -2,10 +2,13 @@
 
 This repository is the public audio distribution companion to the [Open Consciousness Functions (OCF) project](https://github.com/ocfproject-org/open-consciousness-functions). It hosts the library website, catalog metadata, release information, and future publishing automation. Audio is generated and reviewed in the main project—not here—and published as GitHub Release assets rather than committed to Git.
 
-**Planned website:** https://ocfproject.org (domain cutover pending).
+**Live audio library:** https://ocfproject-org.github.io/open-consciousness-functions-audio/
 
-Migration preparation targets `ocfproject-org`; publication remains held. See
-[the transfer checklist](docs/ORG_MIGRATION.md) before activating these changes.
+**Planned custom domain:** https://ocfproject.org (domain cutover pending; use the live library link above).
+
+Both repositories now belong to `ocfproject-org`; the library is deployed at the
+project URL above. Audio publication remains held pending destination reconciliation
+and final release approval. See [the transfer checklist](docs/ORG_MIGRATION.md).
 
 **Releases:** https://github.com/ocfproject-org/open-consciousness-functions-audio/releases
 
