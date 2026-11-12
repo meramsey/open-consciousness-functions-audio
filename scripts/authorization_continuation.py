@@ -71,8 +71,19 @@ def _context(context, expected_pin, original, now, *, expected_release_scope):
     roles, ids, owner_ids = {}, set(), set()
     for row in rows:
         fields(row, ("role", "message_id", "author", "author_id", "sent_at", "text"))
-        for key in ("role", "message_id", "author_id", "text"):
+        for key in ("role", "message_id", "author_id"):
             text(row[key])
+        # Message bodies are authenticated verbatim, not identifier strings.
+        # Preserve ordinary whitespace; normalizing it would invalidate the pin.
+        body = row["text"]
+        require(
+            type(body) is str
+            and bool(body.strip())
+            and not any(
+                (ord(c) < 32 and c not in "\t\r\n") or ord(c) == 127 for c in body
+            ),
+            "invalid instruction body",
+        )
         role = row["role"]
         require(
             role in (*ROLES, "evidence_gap_question", "evidence_gap_disclosure")
