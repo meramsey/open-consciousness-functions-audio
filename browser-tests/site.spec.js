@@ -127,6 +127,7 @@ test('historical names appear only in their source-authoritative lookup page', a
   await expect(page.locator('[data-historical-name-entry]')).toHaveCount(43);
   expect(receipt.historical_mapping_count).toBe(43);
   expect(receipt.historical_name_count).toBe(95);
+  await expect(page.locator('[data-also-current="true"]')).toHaveCount(4);
   expect(receipt.historical_name_kind_counts).toEqual({
     'former-primary': 25,
     'former-teaching': 34,
@@ -139,7 +140,32 @@ test('historical names appear only in their source-authoritative lookup page', a
   await expect(smell).not.toContainText('PLUS-SMELL GREATER');
   await expect(smell).not.toContainText('PLUS-SMELL LESSER');
   await expect(page.locator('[data-historical-name-entry][data-function-id="OCF-SEN-005"]')).not.toContainText('PLUS-TOUCH MORE');
-  await expect(page.locator('a[href*="OCF_HISTORICAL_LOOKUP_CURRENT.md"]')).toHaveAttribute('href', /0bf813beaca8c7370c084b6e9d109a0d8e359f30/);
+  const historicalRow = (functionId, text) => page
+    .locator(`[data-historical-name-entry][data-function-id="${functionId}"]`)
+    .locator('.historical-name-text')
+    .filter({ hasText: new RegExp(`^${text}$`, 'i') })
+    .locator('..');
+  const detox = historicalRow('OCF-BOD-004', 'PLUS-DETOX');
+  await expect(detox).toHaveAttribute('data-historical-kind', 'former-primary');
+  await expect(detox).toHaveAttribute('data-also-current', 'true');
+  await expect(detox.locator('.historical-name-kind')).toHaveText('Former primary cue · Also current');
+  const breathe = historicalRow('OCF-BOD-009', 'Plus Breathe Better');
+  await expect(breathe).toHaveAttribute('data-historical-kind', 'former-teaching');
+  await expect(breathe).toHaveAttribute('data-also-current', 'true');
+  await expect(breathe.locator('.historical-name-kind')).toHaveText('Former teaching phrase · Also current');
+  const sleepTitle = historicalRow('OCF-SLP-005', 'Sleep Easy');
+  await expect(sleepTitle).toHaveAttribute('data-historical-kind', 'former-title');
+  await expect(sleepTitle).toHaveAttribute('data-also-current', 'true');
+  await expect(sleepTitle.locator('.historical-name-kind')).toHaveText('Former title · Also current');
+  const sleepCue = historicalRow('OCF-SLP-005', 'PLUS-SLEEP EASY');
+  await expect(sleepCue).toHaveAttribute('data-historical-kind', 'former-primary');
+  await expect(sleepCue).toHaveAttribute('data-also-current', 'true');
+  await expect(sleepCue.locator('.historical-name-kind')).toHaveText('Former primary cue · Also current');
+  const strong = historicalRow('OCF-PRF-002', 'PLUS-STRONG');
+  await expect(strong).toHaveAttribute('data-historical-kind', 'former-primary');
+  await expect(strong).toHaveAttribute('data-also-current', 'false');
+  await expect(strong.locator('.historical-name-kind')).toHaveText('Former primary cue');
+  await expect(page.locator('a[href*="OCF_HISTORICAL_LOOKUP_CURRENT.md"]')).toHaveAttribute('href', /704440da8e0379cee8dfd332203bc0001c0a5f27/);
   await expect(page.getByText('A match never selects an activation target.')).toBeVisible();
   const unmapped = page.locator('.page-intro');
   await expect(unmapped).toContainText('these 15 functions');
@@ -150,6 +176,13 @@ test('historical names appear only in their source-authoritative lookup page', a
   await page.setViewportSize({ width: 375, height: 900 });
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(375);
   await noAxeViolations(page);
+
+  for (const id of ['OCF-BOD-004', 'OCF-BOD-009', 'OCF-SLP-005', 'OCF-PRF-002']) {
+    await page.goto(`/functions/${id}/`);
+    await expect(page.locator('[data-historical-name-entry], [data-also-current]')).toHaveCount(0);
+    await expect(page.locator('main')).not.toContainText('Also current');
+  }
+  await expect(page.locator('.spoken-cue strong')).toContainText('Plus Inner Power');
 });
 
 test('Start Here leads the home paths while Preparation Learning stays available inside onboarding', async ({ page }) => {
@@ -246,10 +279,11 @@ test('Android-like touch users can open and follow the primary mobile navigation
 
 test('Listening Guide and Preparation Learning clearly state preparation-first guidance and exception limits', async ({ page }) => {
   await page.goto('/listening/');
-  const guidance = page.locator('.preparation-first-note');
+  const guidance = page.locator('#preparation-learning-first').locator('..');
   await expect(guidance).toBeVisible();
   await expect(guidance).toContainText('Complete Preparation Learning before using any OCF function.');
   await expect(guidance).toContainText('Only people who have already learned the official Human Plus preparation track may skip it.');
+  await expect(page.locator('.preparation-first-link a')).toHaveAttribute('href', '../preparation-learning/');
   await expect(guidance).not.toContainText('Michael');
   await expect(guidance).not.toContainText('not a verified official OCF policy');
   await expect(page.locator('main')).not.toContainText('Function guides distinguish exact display cues from exact spoken cues.');

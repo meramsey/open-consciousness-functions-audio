@@ -88,8 +88,18 @@ class PublicSiteBuildTests(unittest.TestCase):
                     "function_id": "OCF-SEN-003",
                     "title": "Smell",
                     "names": [
-                        {"text": "Sensory: Smell", "kind": "former-title", "label": "Former title"},
-                        {"text": "PLUS-SMELL MORE", "kind": "former-primary", "label": "Former primary cue"},
+                        {
+                            "text": "Sensory: Smell",
+                            "kind": "former-title",
+                            "label": "Former title",
+                            "also_current": False,
+                        },
+                        {
+                            "text": "PLUS-SMELL MORE",
+                            "kind": "former-primary",
+                            "label": "Former primary cue · Also current",
+                            "also_current": True,
+                        },
                     ],
                 }],
             )
@@ -101,7 +111,8 @@ class PublicSiteBuildTests(unittest.TestCase):
             )
             self.assertIn('data-historical-kind="former-title"', page)
             self.assertIn("Former title", page)
-            self.assertIn("Former primary cue", page)
+            self.assertIn('data-also-current="true"', page)
+            self.assertIn("Former primary cue · Also current", page)
             self.assertIn("mappings for 1 functions and 2 historical strings", page)
             self.assertIn("Absence from this reference does not establish", page)
         wrong_title = reference.replace("→ Smell /", "→ Taste /")
@@ -120,6 +131,52 @@ class PublicSiteBuildTests(unittest.TestCase):
             resource.write_bytes(raw_resource)
             with self.assertRaisesRegex(ValueError, "unknown function"):
                 _historical_lookup_rows(unknown_target, [function], root)
+
+    def test_historical_overlap_is_exact_normalized_and_same_function_only(self):
+        import yaml
+
+        function = {
+            "function_id": "OCF-PRF-002",
+            "title": {"text": "Strong-Quick"},
+            "commands": [{
+                "display_cue": {"text": "PLUS-INNER POWER"},
+                "spoken_cue": "Plus Inner Power",
+            }],
+            "canonical_resource": "locales/en-US/OCF-PRF-002-Strong-Quick.yaml",
+        }
+        record = {
+            "function_id": function["function_id"],
+            "record_metadata": {
+                "historical_lookup": [
+                    {"text": "PLUS-STRONG", "kind": "former-primary", "decision": "test"},
+                    {"text": "pLuS   inner power", "kind": "former-teaching", "decision": "test"},
+                ]
+            },
+        }
+        raw_resource = yaml.safe_dump(record, sort_keys=True).encode()
+        function["canonical_resource_sha256"] = hashlib.sha256(raw_resource).hexdigest()
+        other_function = {
+            "function_id": "OCF-BOD-004",
+            "title": {"text": "Detox"},
+            "commands": [{"display_cue": {"text": "PLUS-STRONG"}}],
+        }
+        reference = (
+            "# Historical lookup\n\n## Migrated vocabulary\n\n"
+            "- OCF-PRF-002 → Strong-Quick / `PLUS-INNER POWER`; "
+            "historical matches: PLUS-STRONG; pLuS   inner power.\n"
+        )
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            resource = root / function["canonical_resource"]
+            resource.parent.mkdir(parents=True)
+            resource.write_bytes(raw_resource)
+            rows = _historical_lookup_rows(
+                reference, [function, other_function], root
+            )
+        self.assertEqual(
+            [(name["text"], name["also_current"]) for name in rows[0]["names"]],
+            [("PLUS-STRONG", False), ("pLuS   inner power", True)],
+        )
 
     def test_draft_discovery_and_pending_procedure_are_hidden_without_mutating_metadata(self):
         function = {
