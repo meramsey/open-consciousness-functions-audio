@@ -399,9 +399,37 @@ test('manual and system theme combinations keep banner, hover and focus contrast
         background: getComputedStyle(document.body).backgroundColor,
       }), await documentationLink.elementHandle());
       expect(contrast(documentationHover.foreground, documentationHover.background), `${preference}/${osTheme} documentation-link hover`).toBeGreaterThanOrEqual(4.5);
+
+      await page.goto('/downloads/');
+      const cardSurfaces = await page.evaluate(() => {
+        const root = getComputedStyle(document.documentElement);
+        const expectedValue = root.getPropertyValue('--card').trim();
+        const probe = document.createElement('div');
+        probe.style.backgroundColor = expectedValue;
+        document.body.append(probe);
+        const expected = getComputedStyle(probe).backgroundColor;
+        probe.remove();
+        const card = document.querySelector('.download-card');
+        return {
+          expected,
+          card: getComputedStyle(card).backgroundColor,
+          foreground: getComputedStyle(card.querySelector('h2')).color,
+        };
+      });
+      expect(cardSurfaces.card, `${preference}/${osTheme} Downloads card surface`).toBe(cardSurfaces.expected);
+      expect(contrast(cardSurfaces.foreground, cardSurfaces.card), `${preference}/${osTheme} Downloads card title`).toBeGreaterThanOrEqual(4.5);
+      const moreMenu = page.locator('.desktop-nav .more-menu');
+      await moreMenu.locator(':scope > summary').click();
+      const menuSurfaces = await moreMenu.locator('.more-links').evaluate(menu => ({
+        background: getComputedStyle(menu).backgroundColor,
+        foreground: getComputedStyle(menu.querySelector('a')).color,
+      }));
+      expect(menuSurfaces.background, `${preference}/${osTheme} More menu must be opaque`).toBe(cardSurfaces.expected);
+      expect(contrast(menuSurfaces.foreground, menuSurfaces.background), `${preference}/${osTheme} More menu text`).toBeGreaterThanOrEqual(4.5);
     }
   }
   await page.emulateMedia({ forcedColors: 'active', reducedMotion: 'reduce' });
+  await page.keyboard.press('Tab');
   await page.getByRole('button', { name: /Color theme/ }).focus();
   const modes = await page.evaluate(() => ({
     forcedColors: matchMedia('(forced-colors: active)').matches,
@@ -452,35 +480,108 @@ test('current-cue search normalizes separators, offers clear/no-results, and kee
   await noAxeViolations(page, '.reference-tools');
 });
 
-test('catalog filters preserve the active player element and search state without fetching audio bytes', async ({ page }) => {
+test('filtered-out synthetic media remains focused, understandable, seekable and resumable after pause and end', async ({ page }) => {
   const audioRequests = [];
   page.on('request', request => { if (/\.(?:mp3|flac)(?:$|[?#])/i.test(request.url())) audioRequests.push(request.url()); });
-  await page.addInitScript(() => {
-    Object.defineProperty(HTMLMediaElement.prototype, 'src', {
+  const sampleRate = 8000;
+  const sampleCount = sampleRate * 3;
+  const wav = Buffer.alloc(44 + sampleCount, 128);
+  wav.write('RIFF', 0); wav.writeUInt32LE(36 + sampleCount, 4); wav.write('WAVE', 8);
+  wav.write('fmt ', 12); wav.writeUInt32LE(16, 16); wav.writeUInt16LE(1, 20);
+  wav.writeUInt16LE(1, 22); wav.writeUInt32LE(sampleRate, 24);
+  wav.writeUInt32LE(sampleRate, 28); wav.writeUInt16LE(1, 32); wav.writeUInt16LE(8, 34);
+  wav.write('data', 36); wav.writeUInt32LE(sampleCount, 40);
+  const fixtureURL = `data:audio/wav;base64,${wav.toString('base64')}`;
+  await page.addInitScript(fixture => {
+    Object.defineProperty(HTMLAudioElement.prototype, 'src', {
       configurable: true,
-      get() { return this.dataset.fixtureSource || ''; },
-      set(value) { this.dataset.fixtureSource = String(value); },
+      get() { return this.getAttribute('src') || ''; },
+      set() { this.setAttribute('src', fixture); },
     });
-  });
+  }, fixtureURL);
   await page.goto('/');
   const relax = page.locator('.session-card').filter({ has: page.getByRole('link', { name: 'Relax', exact: true }) });
   const player = relax.locator('audio');
   await expect(player).toBeAttached();
-  await player.evaluate(audio => {
-    Object.defineProperty(audio, 'paused', { configurable: true, value: false });
-    Object.defineProperty(audio, 'ended', { configurable: true, value: false });
-    Object.defineProperty(audio, 'currentTime', { configurable: true, writable: true, value: 42.25 });
-    audio.dataset.fixtureIdentity = 'controlled-mock-player';
+  await player.evaluate(audio => audio.load());
+  await expect.poll(() => player.evaluate(audio => audio.duration)).toBeGreaterThan(2.9);
+  await player.evaluate(audio => { audio.dataset.fixtureIdentity = 'relax-synthetic-wav'; });
+  const fixtureControl = await relax.evaluate(card => {
+    const player = card.querySelector('audio');
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.dataset.fixturePlaybackControl = '';
+    button.textContent = 'Play synthetic test media';
+    button.addEventListener('click', async () => {
+      if (player.paused || player.ended) await player.play();
+      else player.pause();
+    });
+    card.append(button);
+    return button.dataset.fixturePlaybackControl;
   });
-  await page.locator('#search').fill('OCF-BOD-001');
+  expect(fixtureControl).toBe('');
+  const fixtureButton = relax.locator('[data-fixture-playback-control]');
+  await fixtureButton.focus();
+  await page.keyboard.press('Enter');
+  await expect.poll(() => player.evaluate(audio => audio.paused)).toBe(false);
+  await player.evaluate(audio => { audio.currentTime = 0.6; });
+  await player.evaluate(audio => audio.dispatchEvent(new Event('timeupdate')));
+  const positionBeforeFilter = await player.evaluate(audio => audio.currentTime);
+  await player.focus();
+  const focusedBeforeFilter = await player.evaluate(audio => document.activeElement === audio);
+  expect(focusedBeforeFilter).toBe(true);
+  await page.locator('#search').evaluate(input => {
+    input.value = 'OCF-BOD-001';
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+  });
   await expect(page.locator('#results-count')).toContainText('1 matching session edition');
   await expect(relax).toBeVisible();
-  await expect(relax.locator('[data-filter-pinned]')).toBeVisible();
-  const state = await player.evaluate(audio => ({ connected: audio.isConnected, currentTime: audio.currentTime, paused: audio.paused, fixture: audio.dataset.fixtureIdentity }));
-  expect(state).toEqual({ connected: true, currentTime: 42.25, paused: false, fixture: 'controlled-mock-player' });
+  await expect(relax.locator('[data-filter-pinned]')).toContainText('Currently playing');
+  expect(await player.evaluate(audio => audio.isSameNode(document.querySelector('.session-card[data-function-id="OCF-FND-004"] audio')))).toBe(true);
+  expect(await player.evaluate(audio => document.activeElement === audio)).toBe(true);
+  await fixtureButton.focus();
+  await page.keyboard.press('Enter');
+  await expect.poll(() => player.evaluate(audio => audio.paused)).toBe(true);
+  await expect(relax.locator('[data-filter-pinned]')).toContainText('Paused at 0:');
+  const pausedPosition = await player.evaluate(audio => audio.currentTime);
+  expect(pausedPosition).toBeGreaterThanOrEqual(positionBeforeFilter);
+  expect(pausedPosition).toBeLessThan(2.9);
+  expect(await player.evaluate(audio => audio.isConnected)).toBe(true);
+  expect(await fixtureButton.evaluate(button => document.activeElement === button)).toBe(true);
+  await page.locator('#search').evaluate(input => {
+    input.value = 'OCF-FND-004';
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+  });
+  await expect(relax).toBeVisible();
+  await expect(relax.locator('[data-filter-pinned]')).toBeHidden();
+  await page.locator('#search').focus();
+  await page.locator('#search').evaluate(input => {
+    input.value = 'OCF-BOD-001';
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+  });
+  await expect(relax).toBeVisible();
+  await expect(relax.locator('[data-filter-pinned]')).toContainText('Paused at 0:');
+  await fixtureButton.focus();
+  await page.keyboard.press('Enter');
+  await expect.poll(() => player.evaluate(audio => audio.paused)).toBe(false);
+  expect(await player.evaluate(audio => audio.currentTime)).toBeGreaterThanOrEqual(pausedPosition);
+  await expect(relax.locator('[data-filter-pinned]')).toContainText('Currently playing');
+  await expect.poll(() => player.evaluate(audio => audio.ended), { timeout: 5000 }).toBe(true);
+  await expect(relax).toBeVisible();
+  await expect(relax.locator('[data-filter-pinned]')).toContainText('Playback ended');
+  expect(await player.evaluate(audio => audio.isConnected)).toBe(true);
+  expect(await fixtureButton.evaluate(button => document.activeElement === button)).toBe(true);
+  await page.keyboard.press('Enter');
+  await expect.poll(() => player.evaluate(audio => !audio.paused && !audio.ended)).toBe(true);
+  await expect(relax).toBeVisible();
+  expect(await player.evaluate(audio => audio.isConnected)).toBe(true);
+  expect(await player.evaluate(audio => audio.currentTime)).toBeLessThan(0.5);
+  expect(await player.evaluate(audio => audio !== document.querySelector('.session-card[data-function-id="OCF-BOD-001"] audio'))).toBe(true);
+  expect(await player.evaluate(audio => audio === document.querySelector('.session-card[data-function-id="OCF-FND-004"] audio'))).toBe(true);
+  expect(await player.getAttribute('data-fixture-identity')).toBe('relax-synthetic-wav');
   await page.locator('#clear-library-filters').click();
   await expect(relax.locator('[data-filter-pinned]')).toBeHidden();
-  expect(await player.evaluate(audio => audio.isConnected && audio.currentTime === 42.25 && !audio.paused)).toBe(true);
+  expect(await player.evaluate(audio => audio.isConnected && !audio.paused)).toBe(true);
   expect(audioRequests).toEqual([]);
 
   await page.goto('/functions/');

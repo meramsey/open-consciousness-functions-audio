@@ -1,3 +1,13 @@
+:root {
+  --card: #fffefa;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme]) {
+    --card: #18262c;
+  }
+}
+
 :root[data-theme="light"] {
   color-scheme: light;
   --paper: #f3f1ea;

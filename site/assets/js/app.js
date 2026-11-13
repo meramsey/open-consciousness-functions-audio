@@ -56,6 +56,7 @@
   const selectionCount = document.getElementById('selection-count');
   let catalogItems = [];
   let catalogCards = [];
+  const pinnedItems = new Set();
   function saveFilterState() {
     try {
       sessionStorage.setItem(filterStateKey, JSON.stringify(Object.fromEntries(filterControls.map(([key, control]) => [key, control.value]))));
@@ -88,24 +89,43 @@
     let pinned = 0;
     catalogItems.forEach((item, index) => {
       const card = catalogCards[index];
-      const playing = [...card.querySelectorAll('audio')].some(player => !player.paused && !player.ended);
-      const keepVisible = visible.has(item) || playing;
-      card.hidden = !keepVisible;
+      const player = card.querySelector('audio');
+      const playing = player && !player.paused && !player.ended;
+      if (!visible.has(item) && (playing || card.contains(document.activeElement))) pinnedItems.add(item);
+      const keepPinned = !visible.has(item) && pinnedItems.has(item);
+      card.hidden = !visible.has(item) && !keepPinned;
       const note = card.querySelector('[data-filter-pinned]');
       if (note) {
-        note.hidden = visible.has(item) || !playing;
-        if (playing && !visible.has(item)) pinned += 1;
+        note.hidden = !keepPinned;
+        if (keepPinned) {
+          pinned += 1;
+          note.textContent = playing
+            ? 'Currently playing; this edition does not match the current filters.'
+            : player?.ended
+              ? 'Playback ended; this edition does not match the current filters. Its player remains available to replay.'
+              : player && !player.paused
+                ? 'Player active; this edition does not match the current filters. Its controls remain available.'
+                : player
+                  ? `Paused at ${formatPlaybackTime(player.currentTime)}; this edition does not match the current filters. Its controls remain available to resume.`
+                  : 'This edition does not match the current filters but remains available while its controls have focus.';
+        }
       }
     });
     resultsCount.textContent = visible.size
-      ? `${visible.size} matching session ${visible.size === 1 ? 'edition' : 'editions'}${pinned ? `; ${pinned} currently playing ${pinned === 1 ? 'edition is' : 'editions are'} kept visible` : ''}`
-      : `No session editions match these filters${pinned ? `; ${pinned} currently playing ${pinned === 1 ? 'edition is' : 'editions are'} kept visible` : ''}.`;
+      ? `${visible.size} matching session ${visible.size === 1 ? 'edition' : 'editions'}${pinned ? `; ${pinned} nonmatching ${pinned === 1 ? 'edition remains' : 'editions remain'} available below` : ''}`
+      : `No session editions match these filters${pinned ? `; ${pinned} nonmatching ${pinned === 1 ? 'edition remains' : 'editions remain'} available below` : ''}.`;
     if (noResults) noResults.hidden = visible.size > 0;
     if (clearFilters) clearFilters.hidden = !filterControls.some(([, control]) => control.value);
   }
 
+  function formatPlaybackTime(seconds) {
+    const value = Number.isFinite(seconds) && seconds > 0 ? Math.floor(seconds) : 0;
+    return `${Math.floor(value / 60)}:${String(value % 60).padStart(2, '0')}`;
+  }
+
   function createSessionCard(item) {
     const card = el('article', undefined, 'session-card');
+    card.dataset.functionId = item.id;
     const title = el('h3'); const page = el('a', item.title);
     page.href = item.href; title.append(page); card.append(title);
     card.append(el('p', `${item.id} · ${item.locale} · ${item.voice} · v${item.edition}`, 'session-meta'));
@@ -117,7 +137,7 @@
     if (mp3) {
       const player = el('audio'); player.controls = true; player.preload = 'none'; player.src = mp3.download_url;
       player.setAttribute('aria-label', `Listen to ${item.title}, ${item.locale}, ${item.voice}, edition ${item.edition}`);
-      ['play', 'pause', 'ended'].forEach(event => player.addEventListener(event, render));
+      ['play', 'pause', 'ended', 'seeked'].forEach(event => player.addEventListener(event, render));
       card.append(player);
     }
     item.assets.forEach(asset => {
@@ -186,6 +206,7 @@
     });
     clearFilters?.addEventListener('click', () => {
       filterControls.forEach(([, control]) => { control.value = ''; });
+      pinnedItems.clear();
       const url = new URL(location.href); url.searchParams.delete('function');
       history.replaceState({}, '', url);
       saveFilterState(); render(); search.focus();
