@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "source_repository": "https://github.com/ocfproject-org/open-consciousness-functions",
-  "source_commit": "d7e43189131e11dc6413adb984dd61b2f5d8de44",
+  "source_commit": "0bf813beaca8c7370c084b6e9d109a0d8e359f30",
   "source_version": "0.1.0",
   "locale": "en-US",
   "exporter": "ocf.public-site-guides/1"

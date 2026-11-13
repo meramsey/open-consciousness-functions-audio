@@ -139,7 +139,7 @@ test('historical names appear only in their source-authoritative lookup page', a
   await expect(smell).not.toContainText('PLUS-SMELL GREATER');
   await expect(smell).not.toContainText('PLUS-SMELL LESSER');
   await expect(page.locator('[data-historical-name-entry][data-function-id="OCF-SEN-005"]')).not.toContainText('PLUS-TOUCH MORE');
-  await expect(page.locator('a[href*="OCF_HISTORICAL_LOOKUP_CURRENT.md"]')).toHaveAttribute('href', /d7e43189131e11dc6413adb984dd61b2f5d8de44/);
+  await expect(page.locator('a[href*="OCF_HISTORICAL_LOOKUP_CURRENT.md"]')).toHaveAttribute('href', /0bf813beaca8c7370c084b6e9d109a0d8e359f30/);
   await expect(page.getByText('A match never selects an activation target.')).toBeVisible();
   const unmapped = page.locator('.page-intro');
   await expect(unmapped).toContainText('these 15 functions');
