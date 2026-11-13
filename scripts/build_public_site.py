@@ -10,6 +10,7 @@ import re
 import shutil
 import tempfile
 import time
+import unicodedata
 import urllib.request
 from pathlib import Path
 from urllib.error import HTTPError
@@ -38,6 +39,13 @@ HISTORICAL_LOOKUP_KIND_LABELS = {
     "legacy-phrase": "Legacy phrase",
 }
 PUBLIC_DISCOVERY_STATUSES = {"canonical", "reviewed"}
+
+
+def _historical_lookup_form(text):
+    """Exact same-function comparison with only Unicode, case and whitespace normalization."""
+    return " ".join(unicodedata.normalize("NFC", text).casefold().split())
+
+
 FORBIDDEN_PUBLIC_KEYS = {
     "narration",
     "narration_text",
@@ -634,14 +642,24 @@ def build_public_site(
             ),
         )
         listening_source = guide_export["listening_guide"]["markdown"]
-        listening_html = _preparation_first_note() + render_markdown(
-            listening_source.replace(STALE_CUE_DISTINCTION_NOTE, "")
+        listening_markdown = listening_source.replace(
+            STALE_CUE_DISTINCTION_NOTE, ""
+        )
+        listening_html = render_markdown(listening_markdown)
+        preparation_paragraph = f"<p>{_html(PREPARATION_FIRST_GUIDANCE)}</p>"
+        _require(
+            listening_html.count(preparation_paragraph) == 1,
+            "Listening Guide must have one preparation-first paragraph",
+        )
+        listening_html = listening_html.replace(
+            preparation_paragraph,
+            preparation_paragraph + _preparation_first_link(),
+            1,
         )
         listening_html += _recommended_settings(source_commit)
         listening_html += _device_links()
         listening_toc_source = (
-            "## Preparation Learning first\n\n"
-            + listening_source.replace(STALE_CUE_DISTINCTION_NOTE, "")
+            listening_markdown
             + "\n\n## Recommended audio settings\n\n## Device-specific setup"
         )
         _write(
@@ -1134,6 +1152,14 @@ def _historical_lookup_rows(markdown, functions, source_root):
             [name.get("text") for name in typed_names] == source_names,
             f"historical lookup names differ from pinned canonical records: {function_id}",
         )
+        current_terms = {_historical_lookup_form(function["title"]["text"])}
+        for command in function["commands"]:
+            for cue in (
+                command.get("display_cue", {}).get("text"),
+                command.get("spoken_cue"),
+            ):
+                if isinstance(cue, str) and cue.strip():
+                    current_terms.add(_historical_lookup_form(cue))
         names = []
         for name in typed_names:
             kind = name.get("kind")
@@ -1141,11 +1167,16 @@ def _historical_lookup_rows(markdown, functions, source_root):
                 kind in HISTORICAL_LOOKUP_KIND_LABELS,
                 f"historical lookup classification is unknown: {function_id} / {kind}",
             )
+            also_current = _historical_lookup_form(name["text"]) in current_terms
+            label = HISTORICAL_LOOKUP_KIND_LABELS[kind]
+            if also_current:
+                label += " · Also current"
             names.append(
                 {
                     "text": name["text"],
                     "kind": kind,
-                    "label": HISTORICAL_LOOKUP_KIND_LABELS[kind],
+                    "label": label,
+                    "also_current": also_current,
                 }
             )
         seen.add(function_id)
@@ -1499,7 +1530,7 @@ def _historical_names_page(
     rows, functions, source_commit, *, historical_reference_sha256
 ):
     entries = "".join(
-        f'''<article class="historical-name-entry" data-historical-name-entry data-function-id="{_html(row["function_id"])}"><h2><a href="../functions/{_html(row["function_id"])}/">{_html(row["title"])}</a> <span class="stable-id">{_html(row["function_id"])}</span></h2><ul>{"".join(f'<li data-historical-kind="{_html(name["kind"])}"><span class="historical-name-kind">{_html(name["label"])}</span> <span>{_html(name["text"])}</span></li>' for name in row["names"])}</ul></article>'''
+        f'''<article class="historical-name-entry" data-historical-name-entry data-function-id="{_html(row["function_id"])}"><h2><a href="../functions/{_html(row["function_id"])}/">{_html(row["title"])}</a> <span class="stable-id">{_html(row["function_id"])}</span></h2><ul>{"".join(f'<li data-historical-kind="{_html(name["kind"])}" data-also-current="{str(name["also_current"]).lower()}"><span class="historical-name-kind">{_html(name["label"])}</span> <span class="historical-name-text">{_html(name["text"])}</span></li>' for name in row["names"])}</ul></article>'''
         for row in rows
     )
     source_url = (
@@ -1521,6 +1552,9 @@ def _historical_names_page(
         '<h1>Historical names</h1><p>These are only the historical matches listed in '
         'the pinned OCF reference. Each type label comes from the canonical '
         'historical_lookup.kind field; types are not inferred from the spelling. '
+        '“Also current” marks an exact case/whitespace-normalized match to this '
+        'same function’s current title, active display cue, or active spoken cue; '
+        'the source historical classification remains unchanged. '
         'They are for lookup; a match never selects an activation target. Use the '
         'current function guide for current instructions.</p>'
         f'<p>The pinned reference contains mappings for {len(rows)} functions and '
@@ -1574,14 +1608,8 @@ def _preparation_page(rows, transcript_paths):
     return f'<nav class="breadcrumbs" aria-label="Breadcrumb"><a href="../">Home</a> / Preparation Learning</nav><header class="page-intro"><p class="eyebrow">Separate introductory session</p><h1>Preparation Learning</h1><p>{_html(PREPARATION_FIRST_GUIDANCE)}</p><p>This published session is separate from the 58 canonical function records. Its transcript, when available, is tied to the exact selected audio edition. Follow only the instructions in that published session.</p></header><section class="guide-section"><h2>Listen to an available edition</h2>{sessions}</section><p><a href="../functions/">Browse the 58 function guides</a></p>'
 
 
-def _preparation_first_note():
-    return (
-        '<aside class="guide-section preparation-first-note" '
-        'aria-label="Preparation Learning first"><h2 id="preparation-learning-first">Preparation Learning first</h2>'
-        f'<p>{_html(PREPARATION_FIRST_GUIDANCE)}</p>'
-        '<p><a href="../preparation-learning/">Open Preparation Learning</a></p>'
-        '</aside>'
-    )
+def _preparation_first_link():
+    return '<p class="preparation-first-link"><a href="../preparation-learning/">Open Preparation Learning</a></p>'
 
 
 def _downloads_from_catalog(catalog):
