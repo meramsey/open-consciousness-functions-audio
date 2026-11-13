@@ -62,7 +62,7 @@
       message = `Loading audio for ${title}${edition}.${filteredNote}`;
     } else if (!audio.paused) {
       message = `Playing ${title}${edition}.${filteredNote}`;
-    } else if (startedPlayers.has(audio) || Number(audio.dataset.ocfResumePosition) > 0) {
+    } else if (startedPlayers.has(audio) || Number(audio.dataset.ocfResumePosition) > 0 || audio.dataset.ocfResumePositionExplicit === 'true') {
       const position = Number(audio.dataset.ocfResumePosition) > 0 ? Number(audio.dataset.ocfResumePosition) : audio.currentTime;
       message = `Paused at ${playbackTime(position)}. Use the player controls to resume.${filteredNote}`;
     } else if (filtered && audio.closest('.session-card')?.contains(document.activeElement)) {
@@ -100,21 +100,43 @@
     }));
     audio.addEventListener('play', () => {
       startedPlayers.add(audio);
-      if (audio.dataset.ocfResumeEnded === 'true') delete audio.dataset.ocfResumeEnded;
+      const clearRestoredBookmark = () => {
+        delete audio.dataset.ocfRestoredBookmarkPending;
+        delete audio.dataset.ocfRestoredBookmarkPosition;
+        delete audio.dataset.ocfRestoredBookmarkEnded;
+      };
+      if (audio.dataset.ocfResumeEnded === 'true') {
+        delete audio.dataset.ocfResumeEnded;
+        clearRestoredBookmark();
+      }
+      if (audio.dataset.ocfResumePositionExplicit === 'true') {
+        delete audio.dataset.ocfResumePositionExplicit;
+        clearRestoredBookmark();
+      }
       const resumePosition = Number(audio.dataset.ocfResumePosition);
       if (Number.isFinite(resumePosition) && resumePosition > 0) {
         const restorePosition = () => {
           try {
+            audio.dataset.ocfApplyingResume = 'true';
             const finishRestore = () => {
-              if (Math.abs(audio.currentTime - resumePosition) < 0.25) delete audio.dataset.ocfResumePosition;
+              if (Math.abs(audio.currentTime - resumePosition) < 0.25) {
+                delete audio.dataset.ocfResumePosition;
+                delete audio.dataset.ocfApplyingResume;
+                clearRestoredBookmark();
+              }
             };
             audio.addEventListener('seeked', finishRestore, {once: true});
             audio.currentTime = resumePosition;
             if (!audio.seeking && Math.abs(audio.currentTime - resumePosition) < 0.25) {
               audio.removeEventListener('seeked', finishRestore);
               delete audio.dataset.ocfResumePosition;
+              delete audio.dataset.ocfApplyingResume;
+              clearRestoredBookmark();
             }
-          } catch (_) { /* Leave native controls available if this browser cannot restore a seek yet. */ }
+          } catch (_) {
+            delete audio.dataset.ocfApplyingResume;
+            /* Leave native controls available if this browser cannot restore a seek yet. */
+          }
         };
         if (audio.readyState >= HTMLMediaElement.HAVE_METADATA) restorePosition();
         else audio.addEventListener('loadedmetadata', restorePosition, {once: true});

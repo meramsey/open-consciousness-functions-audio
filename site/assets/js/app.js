@@ -76,18 +76,22 @@
       for (const [key, control] of filterControls) if (typeof saved[key] === 'string') control.value = saved[key];
     } catch (_) { /* Ignore unavailable or invalid session state. */ }
   }
-  function savePlaybackState(item, player) {
+  function savePlaybackState(item, player, {liveSeek = false} = {}) {
     if (!item || !player) return;
     let previous = null;
     try {
       previous = JSON.parse(sessionStorage.getItem(playbackStateKey) || 'null');
     } catch (_) { /* Continue with live media state when storage is unavailable. */ }
     const previousMatches = previous && previous.functionId === item.id && previous.title === item.title && previous.locale === item.locale && previous.voiceId === item.voiceId && previous.edition === item.edition && Date.now() - previous.savedAt <= 30 * 60 * 1000;
-    const ended = player.ended || player.dataset.ocfResumeEnded === 'true' || (previousMatches && previous.ended === true && !player.dataset.ocfResumePosition);
-    const currentPosition = Number.isFinite(player.currentTime) && player.currentTime > 0 ? player.currentTime : 0;
+    const previousExplicitPosition = previousMatches && previous.positionIsExplicit === true;
+    const explicitPosition = liveSeek || player.dataset.ocfResumePositionExplicit === 'true' || previousExplicitPosition;
+    const restoredBookmarkPending = !liveSeek && player.dataset.ocfRestoredBookmarkPending === 'true';
+    const restoredPosition = Number(player.dataset.ocfRestoredBookmarkPosition);
+    const ended = !liveSeek && (restoredBookmarkPending ? player.dataset.ocfRestoredBookmarkEnded === 'true' : player.ended || player.dataset.ocfResumeEnded === 'true' || (previousMatches && previous.ended === true && !player.dataset.ocfResumePosition && !player.dataset.ocfResumePositionExplicit));
+    const currentPosition = Number.isFinite(player.currentTime) && player.currentTime >= 0 ? player.currentTime : 0;
     const pendingPosition = Number(player.dataset.ocfResumePosition);
     const previousPosition = previousMatches && Number.isFinite(previous.position) && previous.position > 0 ? previous.position : 0;
-    const position = ended ? 0 : currentPosition || (Number.isFinite(pendingPosition) && pendingPosition > 0 ? pendingPosition : previousPosition);
+    const position = ended ? 0 : restoredBookmarkPending && Number.isFinite(restoredPosition) ? restoredPosition : explicitPosition ? currentPosition : currentPosition > 0 ? currentPosition : (Number.isFinite(pendingPosition) && pendingPosition > 0 ? pendingPosition : previousPosition);
     if (position === 0 && !lastPlayedItem) return;
     try {
       sessionStorage.setItem(playbackStateKey, JSON.stringify({
@@ -98,6 +102,7 @@
         edition: item.edition,
         position,
         ended,
+        positionIsExplicit: !ended && Boolean(explicitPosition),
         filteredOut: catalogCards[catalogItems.indexOf(item)]?.dataset.filteredOut === 'true',
         savedAt: Date.now(),
       }));
@@ -116,8 +121,12 @@
       const player = index >= 0 ? catalogCards[index]?.querySelector('audio') : null;
       if (!item || !player) return;
       if (saved.ended) player.dataset.ocfResumeEnded = 'true';
+      else if (saved.positionIsExplicit === true && saved.position === 0) player.dataset.ocfResumePositionExplicit = 'true';
       else if (!Number.isFinite(saved.position) || saved.position <= 0) return;
       else player.dataset.ocfResumePosition = String(saved.position);
+      player.dataset.ocfRestoredBookmarkPending = 'true';
+      player.dataset.ocfRestoredBookmarkPosition = String(saved.position);
+      player.dataset.ocfRestoredBookmarkEnded = String(saved.ended === true);
       lastPlayedItem = item;
       if (saved.filteredOut) pinnedItems.add(item);
     } catch (_) { /* Ignore invalid or unavailable session playback state. */ }
@@ -225,7 +234,22 @@
         try { sessionStorage.removeItem(playbackStateKey); } catch (_) { /* Keep playback usable if storage is unavailable. */ }
       });
       ['pause', 'ended'].forEach(event => player.addEventListener(event, () => savePlaybackState(item, player)));
-      player.addEventListener('seeked', () => savePlaybackState(item, player));
+      player.addEventListener('seeking', () => {
+        if (player.dataset.ocfApplyingResume !== 'true') player.dataset.ocfLiveSeek = 'true';
+      });
+      player.addEventListener('seeked', () => {
+        const liveSeek = player.dataset.ocfLiveSeek === 'true';
+        if (liveSeek) {
+          delete player.dataset.ocfResumePosition;
+          delete player.dataset.ocfResumeEnded;
+          delete player.dataset.ocfResumePositionExplicit;
+          delete player.dataset.ocfRestoredBookmarkPending;
+          delete player.dataset.ocfRestoredBookmarkPosition;
+          delete player.dataset.ocfRestoredBookmarkEnded;
+        }
+        savePlaybackState(item, player, {liveSeek});
+        if (liveSeek) delete player.dataset.ocfLiveSeek;
+      });
     }
     item.assets.forEach(asset => {
       const format = String(asset.format || 'file').toUpperCase();

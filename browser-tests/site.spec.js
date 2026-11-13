@@ -653,6 +653,7 @@ test('Back navigation preserves the same active synthetic player position and fi
   expect(await restoredPlayer.evaluate(audio => audio.currentSrc.startsWith('data:audio/wav'))).toBe(true);
   const nativePosition = await restoredPlayer.evaluate(audio => audio.currentTime);
   let pendingPosition = Number(await restoredPlayer.getAttribute('data-ocf-resume-position')) || 0;
+  await expect(restoredPlayer).toHaveAttribute('data-ocf-restored-bookmark-pending', 'true');
   expect(Math.max(nativePosition, pendingPosition)).toBeGreaterThanOrEqual(positionBeforeNavigation - 0.2);
   await expect(relax).toBeVisible();
   expect(await restoredPlayer.evaluate(audio => audio.paused)).toBe(true);
@@ -668,6 +669,7 @@ test('Back navigation preserves the same active synthetic player position and fi
   await expect(page.locator('#search')).toHaveValue('OCF-BOD-001');
   pendingPosition = Number(await secondRestorePlayer.getAttribute('data-ocf-resume-position')) || 0;
   const secondNativePosition = await secondRestorePlayer.evaluate(audio => audio.currentTime);
+  await expect(secondRestorePlayer).toHaveAttribute('data-ocf-restored-bookmark-pending', 'true');
   expect(Math.max(secondNativePosition, pendingPosition)).toBeGreaterThanOrEqual(firstRestorePosition - 0.2);
   expect(await secondRestorePlayer.evaluate(audio => audio.paused)).toBe(true);
   await expect(relax).toBeVisible();
@@ -691,9 +693,52 @@ test('Back navigation preserves the same active synthetic player position and fi
   await page.keyboard.press('Enter');
   await expect.poll(() => secondRestorePlayer.evaluate(audio => !audio.paused && !audio.ended)).toBe(true);
   await expect.poll(() => secondRestorePlayer.evaluate((audio, expected) => audio.currentTime >= expected - 0.2, expectedResumePosition)).toBe(true);
+  await expect(secondRestorePlayer).not.toHaveAttribute('data-ocf-restored-bookmark-pending');
   await page.keyboard.press('Enter');
   await expect.poll(() => secondRestorePlayer.evaluate(audio => audio.paused)).toBe(true);
   expect(await secondRestorePlayer.evaluate((audio, expected) => audio.isConnected && audio.currentTime >= expected - 0.2, expectedResumePosition)).toBe(true);
+
+  await secondRestorePlayer.evaluate(audio => { audio.currentTime = 0; });
+  await expect.poll(() => page.evaluate(() => {
+    const saved = JSON.parse(sessionStorage.getItem('ocf-library-playback:/') || 'null');
+    return saved?.position === 0 && saved.positionIsExplicit === true;
+  })).toBe(true);
+  await expect.poll(() => secondRestorePlayer.evaluate(audio => audio.currentTime)).toBe(0);
+  await relax.getByRole('link', {name: 'Relax', exact: true}).click();
+  await expect(page).toHaveURL(/\/functions\/OCF-FND-004\/$/);
+  await page.goBack();
+  await expect(page).toHaveURL(/\/$/);
+  let zeroPositionPlayer = page.locator('.session-card[data-function-id="OCF-FND-004"] audio');
+  await expect(zeroPositionPlayer).toBeAttached();
+  await expect.poll(() => zeroPositionPlayer.getAttribute('data-ocf-resume-position-explicit')).toBe('true');
+  await expect(zeroPositionPlayer).toHaveAttribute('data-ocf-restored-bookmark-pending', 'true');
+  expect(await zeroPositionPlayer.evaluate(audio => audio.paused && audio.currentTime === 0)).toBe(true);
+  await expect(page.locator('.session-card[data-function-id="OCF-FND-004"] [data-playback-status]')).toContainText('Paused at 0:00');
+  await relax.getByRole('link', {name: 'Relax', exact: true}).click();
+  await page.goBack();
+  await expect(page).toHaveURL(/\/$/);
+  zeroPositionPlayer = page.locator('.session-card[data-function-id="OCF-FND-004"] audio');
+  await expect(zeroPositionPlayer).toBeAttached();
+  expect(await zeroPositionPlayer.evaluate(audio => audio.paused && audio.currentTime === 0)).toBe(true);
+  await zeroPositionPlayer.evaluate(audio => { audio.dataset.fixtureIdentity = 'back-navigation-synthetic-wav'; });
+  const zeroResumeControl = page.locator('.session-card[data-function-id="OCF-FND-004"] [data-back-navigation-control]');
+  if (await zeroResumeControl.count() === 0) {
+    await page.locator('.session-card[data-function-id="OCF-FND-004"]').evaluate(card => {
+      const audio = card.querySelector('audio');
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.dataset.backNavigationControl = '';
+      button.textContent = 'Resume from zero synthetic fixture';
+      button.addEventListener('click', async () => { if (audio.paused) await audio.play(); else audio.pause(); });
+      card.append(button);
+    });
+  }
+  await zeroResumeControl.focus();
+  await page.keyboard.press('Enter');
+  await expect.poll(() => zeroPositionPlayer.evaluate(audio => !audio.paused && audio.currentTime < 0.5)).toBe(true);
+  await expect(zeroPositionPlayer).not.toHaveAttribute('data-ocf-restored-bookmark-pending');
+  await page.keyboard.press('Enter');
+  await expect.poll(() => zeroPositionPlayer.evaluate(audio => audio.paused)).toBe(true);
 
   await secondRestorePlayer.evaluate(audio => { audio.currentTime = audio.duration - 0.5; });
   await expect.poll(() => secondRestorePlayer.evaluate(audio => audio.paused && audio.currentTime > 2.4)).toBe(true);
@@ -729,6 +774,34 @@ test('Back navigation preserves the same active synthetic player position and fi
   await expect.poll(() => endedPlayer.evaluate(audio => audio.currentTime < 0.5)).toBe(true);
   await page.keyboard.press('Enter');
   await expect.poll(() => endedPlayer.evaluate(audio => audio.paused)).toBe(true);
+
+  await endedPlayer.evaluate(audio => { audio.currentTime = audio.duration - 0.5; });
+  await expect.poll(() => endedPlayer.evaluate(audio => audio.currentTime > 2.4 && !audio.seeking)).toBe(true);
+  await replayControl.focus();
+  await page.keyboard.press('Enter');
+  await expect.poll(() => endedPlayer.evaluate(audio => audio.ended), {timeout: 5000}).toBe(true);
+  await endedPlayer.evaluate(audio => { audio.currentTime = 1.25; });
+  await expect.poll(() => page.evaluate(() => {
+    const saved = JSON.parse(sessionStorage.getItem('ocf-library-playback:/') || 'null');
+    return saved?.ended === false && saved?.positionIsExplicit === true && saved.position > 1;
+  })).toBe(true);
+  await relax.getByRole('link', {name: 'Relax', exact: true}).click();
+  await expect(page).toHaveURL(/\/functions\/OCF-FND-004\/$/);
+  await page.goBack();
+  await expect(page).toHaveURL(/\/$/);
+  let soughtAfterEndPlayer = page.locator('.session-card[data-function-id="OCF-FND-004"] audio');
+  await expect(soughtAfterEndPlayer).toBeAttached();
+  await expect.poll(() => soughtAfterEndPlayer.getAttribute('data-ocf-resume-position')).toBe('1.25');
+  await expect(soughtAfterEndPlayer).toHaveAttribute('data-ocf-restored-bookmark-pending', 'true');
+  expect(await soughtAfterEndPlayer.evaluate(audio => audio.paused && !audio.ended)).toBe(true);
+  await expect(page.locator('.session-card[data-function-id="OCF-FND-004"] [data-playback-status]')).toContainText('Paused at 0:01');
+  await relax.getByRole('link', {name: 'Relax', exact: true}).click();
+  await page.goBack();
+  await expect(page).toHaveURL(/\/$/);
+  soughtAfterEndPlayer = page.locator('.session-card[data-function-id="OCF-FND-004"] audio');
+  await expect.poll(() => soughtAfterEndPlayer.getAttribute('data-ocf-resume-position')).toBe('1.25');
+  await expect(soughtAfterEndPlayer).toHaveAttribute('data-ocf-restored-bookmark-pending', 'true');
+  expect(await soughtAfterEndPlayer.evaluate(audio => audio.paused && !audio.ended)).toBe(true);
   expect(audioResponses.filter(response => response.status >= 200 && response.status < 300)).toEqual([]);
 });
 
