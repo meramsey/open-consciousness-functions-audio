@@ -146,6 +146,21 @@
 .filter-empty { margin: .5rem 0; color: var(--muted); }
 .directory-filters .filter-empty, .reference-tools .filter-empty { grid-column: 1 / -1; }
 .filter-pinned-status { padding: .5rem .7rem; border-left: 3px solid var(--accent); background: var(--card); color: var(--ink); font-size: .85rem; }
+.playback-status { margin: .4rem 0; padding: .45rem .65rem; border-left: 3px solid var(--line); color: var(--muted); font-size: .85rem; }
+.playback-status.filter-pinned-status { border-left-color: var(--accent); color: var(--ink); }
+.function-audio-actions { display: grid; gap: .55rem; margin: .8rem 0 1.1rem; }
+.function-audio-action-group { display: flex; align-items: center; flex-wrap: wrap; gap: .5rem; }
+.function-audio-action-group > span { flex: 1 1 100%; color: var(--muted); font-size: .8rem; }
+.function-audio-action { display: inline-flex; align-items: center; min-height: 44px; padding: .45rem .75rem; border: 1px solid var(--line); border-radius: .3rem; background: var(--card); color: var(--ink); font-weight: 650; text-underline-offset: .15em; }
+.function-audio-action:focus-visible { outline: 3px solid var(--focus-ring); outline-offset: 2px; }
+.selection-tools details { margin-top: .55rem; }
+.selection-tools details summary { min-height: 44px; display: flex; align-items: center; cursor: pointer; font-weight: 650; }
+.selection-tools details ul { padding-left: 1.2rem; }
+.selection-tools details li + li { margin-top: .5rem; }
+.selection-tools details li button { margin-left: .4rem; }
+.selection-tools details li { overflow-wrap: anywhere; }
+.selection-tools details a { overflow-wrap: anywhere; }
+.selection-tools details button { min-height: 40px; }
 .download-action:focus-visible, .more-menu summary:focus-visible, .more-links a:focus-visible, .mobile-nav summary:focus-visible, .mobile-nav a:focus-visible { outline: 3px solid var(--focus-ring); outline-offset: 2px; }
 .current-breadcrumb { font-weight: 700; }
 .cue-role { color: var(--muted); font: .7rem var(--mono); text-transform: uppercase; margin-right: .35rem; }

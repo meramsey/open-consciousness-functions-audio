@@ -38,6 +38,131 @@
   if (typeof module !== 'undefined') module.exports = {normalize, matches, safeTranscript, highlight};
   if (typeof document === 'undefined') return;
 
+  const managedPlayers = new Set();
+  const startedPlayers = new WeakSet();
+  const failedPlayers = new WeakSet();
+  const playbackTimers = new WeakMap();
+  const playbackTime = seconds => {
+    const value = Number.isFinite(seconds) && seconds > 0 ? Math.floor(seconds) : 0;
+    return `${Math.floor(value / 60)}:${String(value % 60).padStart(2, '0')}`;
+  };
+  const updatePlaybackStatus = audio => {
+    const status = audio.closest('.edition-card, .session-card')?.querySelector('[data-playback-status]');
+    if (!status) return;
+    const title = audio.dataset.sessionTitle || audio.getAttribute('aria-label') || 'This session';
+    const edition = audio.dataset.sessionEdition ? `, edition ${audio.dataset.sessionEdition}` : '';
+    const filtered = audio.closest('.session-card')?.dataset.filteredOut === 'true';
+    const filteredNote = filtered ? ' This edition does not match the current filters; its controls remain available.' : '';
+    let message = '';
+    if (audio.error || failedPlayers.has(audio)) {
+      message = `Audio could not be played. Check your connection or use the direct download link below.${filteredNote}`;
+    } else if (audio.ended || audio.dataset.ocfResumeEnded === 'true') {
+      message = `Playback ended for ${title}${edition}. Use the player controls to replay.${filteredNote}`;
+    } else if (!audio.paused && audio.readyState < HTMLMediaElement.HAVE_FUTURE_DATA) {
+      message = `Loading audio for ${title}${edition}.${filteredNote}`;
+    } else if (!audio.paused) {
+      message = `Playing ${title}${edition}.${filteredNote}`;
+    } else if (startedPlayers.has(audio) || Number(audio.dataset.ocfResumePosition) > 0 || audio.dataset.ocfResumePositionExplicit === 'true') {
+      const position = Number(audio.dataset.ocfResumePosition) > 0 ? Number(audio.dataset.ocfResumePosition) : audio.currentTime;
+      message = `Paused at ${playbackTime(position)}. Use the player controls to resume.${filteredNote}`;
+    } else if (filtered && audio.closest('.session-card')?.contains(document.activeElement)) {
+      message = `This edition does not match the current filters; its player remains available while focused.`;
+    }
+    status.textContent = message;
+    status.hidden = !message;
+  };
+  const registerMediaPlayer = audio => {
+    if (managedPlayers.has(audio)) return;
+    const status = audio.closest('.edition-card, .session-card')?.querySelector('[data-playback-status]');
+    if (!status) return;
+    managedPlayers.add(audio);
+    const cancelPlaybackTimer = () => {
+      const timer = playbackTimers.get(audio);
+      if (timer) window.clearTimeout(timer);
+      playbackTimers.delete(audio);
+    };
+    const monitorPlaybackStart = () => {
+      if (playbackTimers.has(audio)) return;
+      playbackTimers.set(audio, window.setTimeout(() => {
+        playbackTimers.delete(audio);
+        const noSource = audio.networkState === HTMLMediaElement.NETWORK_NO_SOURCE;
+        const stalledDuringPlayback = startedPlayers.has(audio) && !audio.paused && audio.readyState < HTMLMediaElement.HAVE_FUTURE_DATA;
+        if (noSource || stalledDuringPlayback) {
+          failedPlayers.add(audio);
+          updatePlaybackStatus(audio);
+        }
+      }, 8000));
+    };
+    audio.querySelectorAll('source').forEach(source => source.addEventListener('error', () => {
+      failedPlayers.add(audio);
+      cancelPlaybackTimer();
+      updatePlaybackStatus(audio);
+    }));
+    audio.addEventListener('play', () => {
+      startedPlayers.add(audio);
+      const clearRestoredBookmark = () => {
+        delete audio.dataset.ocfRestoredBookmarkPending;
+        delete audio.dataset.ocfRestoredBookmarkPosition;
+        delete audio.dataset.ocfRestoredBookmarkEnded;
+      };
+      if (audio.dataset.ocfResumeEnded === 'true') {
+        delete audio.dataset.ocfResumeEnded;
+        clearRestoredBookmark();
+      }
+      if (audio.dataset.ocfResumePositionExplicit === 'true') {
+        delete audio.dataset.ocfResumePositionExplicit;
+        clearRestoredBookmark();
+      }
+      const resumePosition = Number(audio.dataset.ocfResumePosition);
+      if (Number.isFinite(resumePosition) && resumePosition > 0) {
+        const restorePosition = () => {
+          try {
+            audio.dataset.ocfApplyingResume = 'true';
+            const finishRestore = () => {
+              if (Math.abs(audio.currentTime - resumePosition) < 0.25) {
+                delete audio.dataset.ocfResumePosition;
+                delete audio.dataset.ocfApplyingResume;
+                clearRestoredBookmark();
+              }
+            };
+            audio.addEventListener('seeked', finishRestore, {once: true});
+            audio.currentTime = resumePosition;
+            if (!audio.seeking && Math.abs(audio.currentTime - resumePosition) < 0.25) {
+              audio.removeEventListener('seeked', finishRestore);
+              delete audio.dataset.ocfResumePosition;
+              delete audio.dataset.ocfApplyingResume;
+              clearRestoredBookmark();
+            }
+          } catch (_) {
+            delete audio.dataset.ocfApplyingResume;
+            /* Leave native controls available if this browser cannot restore a seek yet. */
+          }
+        };
+        if (audio.readyState >= HTMLMediaElement.HAVE_METADATA) restorePosition();
+        else audio.addEventListener('loadedmetadata', restorePosition, {once: true});
+      }
+      for (const other of managedPlayers) if (other !== audio && !other.paused) other.pause();
+      monitorPlaybackStart();
+      updatePlaybackStatus(audio);
+    });
+    audio.addEventListener('loadstart', monitorPlaybackStart);
+    audio.addEventListener('waiting', monitorPlaybackStart);
+    ['pause', 'ended', 'seeked', 'error'].forEach(event => audio.addEventListener(event, () => {
+      cancelPlaybackTimer();
+      if (event === 'error') failedPlayers.add(audio);
+      updatePlaybackStatus(audio);
+    }));
+    ['loadedmetadata', 'canplay', 'playing'].forEach(event => audio.addEventListener(event, () => {
+      cancelPlaybackTimer();
+      failedPlayers.delete(audio);
+      updatePlaybackStatus(audio);
+    }));
+    updatePlaybackStatus(audio);
+  };
+  window.ocfRegisterMediaPlayer = registerMediaPlayer;
+  window.ocfUpdateMediaPlayerStatus = updatePlaybackStatus;
+  document.querySelectorAll('audio').forEach(registerMediaPlayer);
+
   const themeButton = document.querySelector('[data-theme-toggle]');
   if (themeButton) {
     const themes = ['system', 'light', 'dark'];

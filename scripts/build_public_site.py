@@ -1018,7 +1018,7 @@ def _home_page(functions, catalog, source_commit):
     return f"""<section class="hero docs-hero"><div class="hero-copy"><p class="eyebrow">Official public documentation and audio</p><h1 id="home-title">Learn the practice.<br><em>Choose how to listen.</em></h1><p class="hero-lede">{_html(PREPARATION_FIRST_GUIDANCE)}</p><div class="hero-actions"><a class="button button-light" href="start/">Start Here <span aria-hidden="true">→</span></a><a class="button button-outline-light" href="functions/">Browse functions</a><a class="button button-outline-light" href="#library">Listen</a></div></div><div class="hero-index" aria-hidden="true">58 FUNCTIONS · {len(categories)} CANONICAL DOMAINS</div></section>
 <section class="home-paths" aria-labelledby="paths-title"><p class="eyebrow">Choose a path</p><h2 id="paths-title">Read first, listen when ready.</h2><div class="path-grid"><a class="path-card" href="start/"><span>01</span><h3>Start Here</h3><p>Preparation-first instructions and optional function exploration.</p></a><a class="path-card" href="listening/"><span>02</span><h3>Listening Guide</h3><p>Comfort, stereo playback, accessibility and device settings.</p></a><a class="path-card" href="quick-reference/"><span>03</span><h3>Quick Reference</h3><p>Find function titles and current spoken cues.</p></a></div></section>
 <section class="release-banner" id="releases" aria-labelledby="release-title"><div class="release-symbol" aria-hidden="true">↗</div><div><p class="eyebrow">Verified release catalog</p><h2 id="release-title">Loading published editions.</h2><p id="release-description">Release files and checksums are read from the verified catalog.</p></div><a class="text-link" href="https://github.com/ocfproject-org/open-consciousness-functions-audio/releases">All releases <span aria-hidden="true">↗</span></a></section>
-<section class="library-section" id="library" aria-labelledby="library-title"><div class="section-heading"><div><p class="eyebrow">Published editions</p><h2 id="library-title">Listen to available sessions</h2></div><span class="count" id="release-count">Loading verified releases</span></div><p class="section-intro">Function documentation is available independently of audio. Each listed edition retains its release file URLs and checksums.</p><div class="library-tools"><label class="sr-only" for="search">Search sessions by function, cue, tag or use</label><input id="search" type="search" placeholder="Search functions, cues, tags or uses" aria-describedby="results-count"><label for="language-filter">Language <select id="language-filter"><option value="">All languages</option></select></label><label for="voice-filter">Voice <select id="voice-filter"><option value="">All voices</option></select></label><button id="clear-library-filters" type="button" hidden>Clear filters</button></div><div class="empty-state" id="empty-state" role="status"><span class="empty-icon" aria-hidden="true">◌</span><h3>No published audio editions are available in the verified catalog.</h3><p>Documentation remains available in the function library.</p></div><p id="results-count" role="status"></p><p id="catalog-no-results" class="filter-empty" hidden>No session editions match these filters.</p><div class="selection-tools"><span id="selection-count">0 files selected</span><button id="download-selection" disabled>Save download list</button><button id="playlist-selection" disabled>Save MP3 playlist</button><p>Selections contain links and checksums; the source files remain individual published release assets.</p></div><div id="catalog-results"></div><div id="release-extras"></div></section>
+<section class="library-section" id="library" aria-labelledby="library-title"><div class="section-heading"><div><p class="eyebrow">Published editions</p><h2 id="library-title">Listen to available sessions</h2></div><span class="count" id="release-count">Loading verified releases</span></div><p class="section-intro">Function documentation is available independently of audio. Each listed edition retains its release file URLs and checksums.</p><div class="library-tools"><label class="sr-only" for="search">Search sessions by function, cue, tag or use</label><input id="search" type="search" placeholder="Search functions, cues, tags or uses" aria-describedby="results-count"><label for="language-filter">Language <select id="language-filter"><option value="">All languages</option></select></label><label for="voice-filter">Voice <select id="voice-filter"><option value="">All voices</option></select></label><button id="clear-library-filters" type="button" hidden>Clear filters</button></div><div class="empty-state" id="empty-state" role="status"><span class="empty-icon" aria-hidden="true">◌</span><h3>No published audio editions are available in the verified catalog.</h3><p>Documentation remains available in the function library.</p></div><p id="results-count" role="status"></p><p id="catalog-no-results" class="filter-empty" hidden>No session editions match these filters.</p><div class="selection-tools"><span id="selection-count" role="status" aria-live="polite" tabindex="-1">0 files selected</span><button id="download-selection" disabled>Save download list</button><button id="playlist-selection" disabled>Save MP3 playlist</button><details id="selected-files-review" hidden><summary id="selected-files-summary">Review selected files (0)</summary><ul id="selected-files-list"></ul><button id="clear-selection" type="button">Clear selected files</button></details><p>Selections contain links and checksums; the source files remain individual published release assets.</p></div><div id="catalog-results"></div><div id="release-extras"></div></section>
 <section class="home-about"><p class="eyebrow">Open source. Independent by design.</p><p>Function documentation comes from canonical OCF locale resources. Audio availability and download checksums come from verified published release manifests. A published recording's transcript is edition-matched; current function guidance is not a substitute for it.</p><a class="text-link" href="about/">About this library <span aria-hidden="true">→</span></a></section>"""
 
 
@@ -1344,6 +1344,7 @@ def _function_page(function, sessions, transcript_paths, source_commit):
         _session_card(row, transcript_paths, site_root_prefix="../../")
         for row in sessions
     )
+    audio_actions = _function_audio_actions(sessions)
     if not session_html:
         session_html = '<p class="no-audio">Documentation is available; this function has no audio edition in the verified published catalog.</p>'
     related = []
@@ -1358,8 +1359,39 @@ def _function_page(function, sessions, transcript_paths, source_commit):
     breadcrumb = f'<nav class="breadcrumbs" aria-label="Breadcrumb"><a href="../../">Home</a> / <a href="../">Functions</a> / <span aria-current="page">{_html(function["title"]["text"])}</span></nav>'
     return (
         breadcrumb
-        + f'''<header class="page-intro" data-function-id="{_html(function["function_id"])}"><p class="eyebrow">{_html(function["function_id"])} · {_html(categories)}</p><h1>{_html(function["title"]["text"])}</h1><p class="lead">{_html(_public_description(function))}</p></header><section class="guide-section"><h2 id="overview">Intended purpose</h2><p>{_html(_public_description(function))}</p>{terms}<p class="source-link">Canonical function source: <a href="{SOURCE_REPOSITORY}/tree/{source_commit}/{_html(function["canonical_resource"])}">this locale resource at pinned commit {source_commit[:12]}</a>.</p></section><section class="guide-section"><h2 id="cues">Cues and documented instructions</h2>{"".join(command_sections)}</section>{lifecycle_html}{safety}<section class="guide-section"><h2 id="listening">Published audio editions</h2><p>Audio availability, voice and transcript are edition-specific. Only release-manifest assets are listed here.</p>{session_html}</section><section class="guide-section"><h2 id="related">Approved related functions</h2><ul class="relationship-list">{related_html}</ul><p>These links are optional and directional. They are not prerequisites or claims of combined effect.</p></section>'''
+        + f'''<header class="page-intro" data-function-id="{_html(function["function_id"])}"><p class="eyebrow">{_html(function["function_id"])} · {_html(categories)}</p><h1>{_html(function["title"]["text"])}</h1>{audio_actions}<p class="lead">{_html(_public_description(function))}</p></header><section class="guide-section"><h2 id="overview">Intended purpose</h2><p>{_html(_public_description(function))}</p>{terms}<p class="source-link">Canonical function source: <a href="{SOURCE_REPOSITORY}/tree/{source_commit}/{_html(function["canonical_resource"])}">this locale resource at pinned commit {source_commit[:12]}</a>.</p></section><section class="guide-section"><h2 id="cues">Cues and documented instructions</h2>{"".join(command_sections)}</section>{lifecycle_html}{safety}<section class="guide-section"><h2 id="listening">Published audio editions</h2><p>Audio availability, voice and transcript are edition-specific. Only release-manifest assets are listed here.</p>{session_html}</section><section class="guide-section"><h2 id="related">Approved related functions</h2><ul class="relationship-list">{related_html}</ul><p>These links are optional and directional. They are not prerequisites or claims of combined effect.</p></section>'''
     )
+
+
+def _session_anchor(row):
+    session = row["session"]
+    asset_id = session.get("asset_id") or row["audio_assets"][0]["asset_id"]
+    return f"session-{_html(asset_id)}"
+
+
+def _function_audio_actions(sessions):
+    groups = []
+    for row in sessions:
+        session = row["session"]
+        title = session.get("title") or row["group"].get("title") or "Session"
+        locale = session.get("locale") or "locale not specified"
+        edition = session.get("edition") or row["release"].get("version") or "edition not specified"
+        label = _html(f"{title}, {locale}, edition {edition}")
+        actions = [
+            f'<a class="function-audio-action" href="#{_session_anchor(row)}" aria-label="Listen to {label}">Listen</a>'
+        ]
+        for asset in row["audio_assets"]:
+            fmt = str(asset["format"]).upper()
+            actions.append(
+                f'<a class="function-audio-action" href="{_html(asset["download_url"])}" aria-label="Download {fmt} for {label}">Download {fmt}</a>'
+            )
+        groups.append(
+            f'<div class="function-audio-action-group" role="group" aria-label="{label}">'
+            f'<span>Edition {_html(edition)}</span>{"".join(actions)}</div>'
+        )
+    if not groups:
+        return ""
+    return f'<nav class="function-audio-actions" aria-label="Listen and download">{"".join(groups)}</nav>'
 
 
 def _discovery_section(title, values):
@@ -1400,7 +1432,7 @@ def _session_card(row, transcript_paths, *, site_root_prefix="../../"):
             else ""
         )
         audio.append(
-            f'<audio controls preload="none" aria-label="Listen to {_html(title)}"><source src="{_html(playable["download_url"])}" type="{media_type}">{track}Your browser may not support this audio format. Use an individual download link.</audio>'
+            f'<audio controls preload="none" aria-label="Listen to {_html(title)}, {_html(session["locale"])}, edition {_html(session["edition"])}" data-session-title="{_html(title)}" data-session-edition="{_html(session["edition"])}" data-session-locale="{_html(session["locale"])}"><source src="{_html(playable["download_url"])}" type="{media_type}">{track}Your browser may not support this audio format. Use an individual download link.</audio><p class="playback-status" data-playback-status role="status" aria-live="polite" hidden></p>'
         )
     for asset in row["audio_assets"]:
         fmt = asset["format"].upper()
@@ -1451,7 +1483,7 @@ def _session_card(row, transcript_paths, *, site_root_prefix="../../"):
     )
     audio_html = "".join(audio)
     transcript_html = "".join(transcript_controls)
-    return f'''<article class="edition-card"><div class="edition-heading">{artwork}<div><h3>{_html(title)}</h3><p>{_html(session["locale"])} · {_html(session["voice_name"])} · edition {_html(session["edition"])}</p><p>Published release <a href="{_html(release["release_url"])}">{_html(release["tag"])}</a> · source audio commit {_html(release["source_ocf_commit"][:12])}</p></div></div>{audio_html}{transcript_html}{companion_html}</article>'''
+    return f'''<article class="edition-card" id="{_session_anchor(row)}"><div class="edition-heading">{artwork}<div><h3>{_html(title)}</h3><p>{_html(session["locale"])} · {_html(session["voice_name"])} · edition {_html(session["edition"])}</p><p>Published release <a href="{_html(release["release_url"])}">{_html(release["tag"])}</a> · source audio commit {_html(release["source_ocf_commit"][:12])}</p></div></div>{audio_html}{transcript_html}{companion_html}</article>'''
 
 
 def _asset_specification(asset, *, size=None, duration=None):

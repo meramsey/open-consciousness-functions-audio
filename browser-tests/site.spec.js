@@ -11,6 +11,34 @@ async function noAxeViolations(page, context = undefined) {
   expect(result.violations, details).toEqual([]);
 }
 
+function silentWavDataURI(seconds = 3) {
+  const sampleRate = 8000;
+  const sampleCount = sampleRate * seconds;
+  const wav = Buffer.alloc(44 + sampleCount, 128);
+  wav.write('RIFF', 0); wav.writeUInt32LE(36 + sampleCount, 4); wav.write('WAVE', 8);
+  wav.write('fmt ', 12); wav.writeUInt32LE(16, 16); wav.writeUInt16LE(1, 20);
+  wav.writeUInt16LE(1, 22); wav.writeUInt32LE(sampleRate, 24);
+  wav.writeUInt32LE(sampleRate, 28); wav.writeUInt16LE(1, 32); wav.writeUInt16LE(8, 34);
+  wav.write('data', 36); wav.writeUInt32LE(sampleCount, 40);
+  return `data:audio/wav;base64,${wav.toString('base64')}`;
+}
+
+async function useSilentWavFixture(page, fixtureURL = silentWavDataURI()) {
+  await page.context().route(url => {
+    let decoded;
+    try { decoded = decodeURIComponent(url.href); } catch (_) { return false; }
+    if (!/(?:\.mp3|\.flac)(?:$|[?#])/i.test(decoded)) return false;
+    return /(?:^|\.)github\.com$|(?:^|\.)githubusercontent\.com$/.test(url.hostname) || /release-assets\.githubusercontent\.com$/i.test(url.hostname);
+  }, route => route.abort());
+  await page.addInitScript(fixture => {
+    Object.defineProperty(HTMLAudioElement.prototype, 'src', {
+      configurable: true,
+      get() { return this.getAttribute('src') || ''; },
+      set() { this.setAttribute('src', fixture); },
+    });
+  }, fixtureURL);
+}
+
 test('accessibility failure is detected by the same fail-closed gate', async ({ page }) => {
   await page.goto('/quick-reference/');
   await page.evaluate(() => document.body.insertAdjacentHTML('beforeend', '<button></button>'));
@@ -483,22 +511,7 @@ test('current-cue search normalizes separators, offers clear/no-results, and kee
 test('filtered-out synthetic media remains focused, understandable, seekable and resumable after pause and end', async ({ page }) => {
   const audioRequests = [];
   page.on('request', request => { if (/\.(?:mp3|flac)(?:$|[?#])/i.test(request.url())) audioRequests.push(request.url()); });
-  const sampleRate = 8000;
-  const sampleCount = sampleRate * 3;
-  const wav = Buffer.alloc(44 + sampleCount, 128);
-  wav.write('RIFF', 0); wav.writeUInt32LE(36 + sampleCount, 4); wav.write('WAVE', 8);
-  wav.write('fmt ', 12); wav.writeUInt32LE(16, 16); wav.writeUInt16LE(1, 20);
-  wav.writeUInt16LE(1, 22); wav.writeUInt32LE(sampleRate, 24);
-  wav.writeUInt32LE(sampleRate, 28); wav.writeUInt16LE(1, 32); wav.writeUInt16LE(8, 34);
-  wav.write('data', 36); wav.writeUInt32LE(sampleCount, 40);
-  const fixtureURL = `data:audio/wav;base64,${wav.toString('base64')}`;
-  await page.addInitScript(fixture => {
-    Object.defineProperty(HTMLAudioElement.prototype, 'src', {
-      configurable: true,
-      get() { return this.getAttribute('src') || ''; },
-      set() { this.setAttribute('src', fixture); },
-    });
-  }, fixtureURL);
+  await useSilentWavFixture(page);
   await page.goto('/');
   const relax = page.locator('.session-card').filter({ has: page.getByRole('link', { name: 'Relax', exact: true }) });
   const player = relax.locator('audio');
@@ -536,7 +549,7 @@ test('filtered-out synthetic media remains focused, understandable, seekable and
   });
   await expect(page.locator('#results-count')).toContainText('1 matching session edition');
   await expect(relax).toBeVisible();
-  await expect(relax.locator('[data-filter-pinned]')).toContainText('Currently playing');
+  await expect(relax.locator('[data-filter-pinned]')).toContainText('Playing Relax');
   expect(await player.evaluate(audio => audio.isSameNode(document.querySelector('.session-card[data-function-id="OCF-FND-004"] audio')))).toBe(true);
   expect(await player.evaluate(audio => document.activeElement === audio)).toBe(true);
   await fixtureButton.focus();
@@ -565,7 +578,7 @@ test('filtered-out synthetic media remains focused, understandable, seekable and
   await page.keyboard.press('Enter');
   await expect.poll(() => player.evaluate(audio => audio.paused)).toBe(false);
   expect(await player.evaluate(audio => audio.currentTime)).toBeGreaterThanOrEqual(pausedPosition);
-  await expect(relax.locator('[data-filter-pinned]')).toContainText('Currently playing');
+  await expect(relax.locator('[data-filter-pinned]')).toContainText('Playing Relax');
   await expect.poll(() => player.evaluate(audio => audio.ended), { timeout: 5000 }).toBe(true);
   await expect(relax).toBeVisible();
   await expect(relax.locator('[data-filter-pinned]')).toContainText('Playback ended');
@@ -595,6 +608,203 @@ test('filtered-out synthetic media remains focused, understandable, seekable and
   await expect(page.locator('[data-function-card]:visible h2')).toContainText('Relax');
 });
 
+test('Back navigation preserves the same active synthetic player position and filter state', async ({ page }) => {
+  const audioResponses = [];
+  page.on('response', response => {
+    if (!/\.(?:mp3|flac)(?:$|[?#])/i.test(response.url())) return;
+    audioResponses.push({host: new URL(response.url()).hostname, status: response.status()});
+  });
+  await useSilentWavFixture(page);
+  await page.goto('/');
+  const relax = page.locator('.session-card').filter({has: page.getByRole('link', {name: 'Relax', exact: true})});
+  const player = relax.locator('audio');
+  await player.evaluate(audio => audio.load());
+  await expect.poll(() => player.evaluate(audio => audio.duration)).toBeGreaterThan(2.9);
+  await player.evaluate(audio => { audio.dataset.fixtureIdentity = 'back-navigation-synthetic-wav'; });
+  await relax.evaluate(card => {
+    const audio = card.querySelector('audio');
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.dataset.backNavigationControl = '';
+    button.textContent = 'Play synthetic back-navigation fixture';
+    button.addEventListener('click', async () => {
+      if (audio.paused || audio.ended) await audio.play();
+      else audio.pause();
+    });
+    card.append(button);
+  });
+  await relax.locator('[data-back-navigation-control]').focus();
+  await page.keyboard.press('Enter');
+  await expect.poll(() => player.evaluate(audio => !audio.paused && !audio.ended)).toBe(true);
+  await player.evaluate(audio => { audio.currentTime = 1.1; });
+  await expect.poll(() => player.evaluate(audio => audio.currentTime)).toBeGreaterThan(1);
+  const positionBeforeNavigation = await player.evaluate(audio => audio.currentTime);
+  await page.locator('#search').fill('OCF-BOD-001');
+  await expect(relax).toBeVisible();
+  await expect(relax.locator('[data-filter-pinned]')).toContainText('Playing Relax');
+
+  await relax.getByRole('link', {name: 'Relax', exact: true}).click();
+  await expect(page).toHaveURL(/\/functions\/OCF-FND-004\/$/);
+  await page.goBack();
+  await expect(page).toHaveURL(/\/$/);
+  const restoredPlayer = page.locator('.session-card[data-function-id="OCF-FND-004"] audio');
+  await expect(restoredPlayer).toBeAttached();
+  await expect(page.locator('#search')).toHaveValue('OCF-BOD-001');
+  expect(await restoredPlayer.evaluate(audio => audio.currentSrc.startsWith('data:audio/wav'))).toBe(true);
+  const nativePosition = await restoredPlayer.evaluate(audio => audio.currentTime);
+  let pendingPosition = Number(await restoredPlayer.getAttribute('data-ocf-resume-position')) || 0;
+  await expect(restoredPlayer).toHaveAttribute('data-ocf-restored-bookmark-pending', 'true');
+  expect(Math.max(nativePosition, pendingPosition)).toBeGreaterThanOrEqual(positionBeforeNavigation - 0.2);
+  await expect(relax).toBeVisible();
+  expect(await restoredPlayer.evaluate(audio => audio.paused)).toBe(true);
+  await expect(relax.locator('[data-playback-status]')).toContainText('Paused at');
+
+  const firstRestorePosition = Math.max(nativePosition, pendingPosition);
+  await relax.getByRole('link', {name: 'Relax', exact: true}).click();
+  await expect(page).toHaveURL(/\/functions\/OCF-FND-004\/$/);
+  await page.goBack();
+  await expect(page).toHaveURL(/\/$/);
+  const secondRestorePlayer = page.locator('.session-card[data-function-id="OCF-FND-004"] audio');
+  await expect(secondRestorePlayer).toBeAttached();
+  await expect(page.locator('#search')).toHaveValue('OCF-BOD-001');
+  pendingPosition = Number(await secondRestorePlayer.getAttribute('data-ocf-resume-position')) || 0;
+  const secondNativePosition = await secondRestorePlayer.evaluate(audio => audio.currentTime);
+  await expect(secondRestorePlayer).toHaveAttribute('data-ocf-restored-bookmark-pending', 'true');
+  expect(Math.max(secondNativePosition, pendingPosition)).toBeGreaterThanOrEqual(firstRestorePosition - 0.2);
+  expect(await secondRestorePlayer.evaluate(audio => audio.paused)).toBe(true);
+  await expect(relax).toBeVisible();
+  await expect(relax.locator('[data-playback-status]')).toContainText('Paused at');
+  const expectedResumePosition = Math.max(secondNativePosition, pendingPosition);
+
+  let restoredControl = relax.locator('[data-back-navigation-control]');
+  if (await restoredControl.count() === 0) {
+    await relax.evaluate(card => {
+      const audio = card.querySelector('audio');
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.dataset.backNavigationControl = '';
+      button.textContent = 'Resume synthetic back-navigation fixture';
+      button.addEventListener('click', async () => { if (audio.paused) await audio.play(); else audio.pause(); });
+      card.append(button);
+    });
+    restoredControl = relax.locator('[data-back-navigation-control]');
+  }
+  await restoredControl.focus();
+  await page.keyboard.press('Enter');
+  await expect.poll(() => secondRestorePlayer.evaluate(audio => !audio.paused && !audio.ended)).toBe(true);
+  await expect.poll(() => secondRestorePlayer.evaluate((audio, expected) => audio.currentTime >= expected - 0.2, expectedResumePosition)).toBe(true);
+  await expect(secondRestorePlayer).not.toHaveAttribute('data-ocf-restored-bookmark-pending');
+  await page.keyboard.press('Enter');
+  await expect.poll(() => secondRestorePlayer.evaluate(audio => audio.paused)).toBe(true);
+  expect(await secondRestorePlayer.evaluate((audio, expected) => audio.isConnected && audio.currentTime >= expected - 0.2, expectedResumePosition)).toBe(true);
+
+  await secondRestorePlayer.evaluate(audio => { audio.currentTime = 0; });
+  await expect.poll(() => page.evaluate(() => {
+    const saved = JSON.parse(sessionStorage.getItem('ocf-library-playback:/') || 'null');
+    return saved?.position === 0 && saved.positionIsExplicit === true;
+  })).toBe(true);
+  await expect.poll(() => secondRestorePlayer.evaluate(audio => audio.currentTime)).toBe(0);
+  await relax.getByRole('link', {name: 'Relax', exact: true}).click();
+  await expect(page).toHaveURL(/\/functions\/OCF-FND-004\/$/);
+  await page.goBack();
+  await expect(page).toHaveURL(/\/$/);
+  let zeroPositionPlayer = page.locator('.session-card[data-function-id="OCF-FND-004"] audio');
+  await expect(zeroPositionPlayer).toBeAttached();
+  await expect.poll(() => zeroPositionPlayer.getAttribute('data-ocf-resume-position-explicit')).toBe('true');
+  await expect(zeroPositionPlayer).toHaveAttribute('data-ocf-restored-bookmark-pending', 'true');
+  expect(await zeroPositionPlayer.evaluate(audio => audio.paused && audio.currentTime === 0)).toBe(true);
+  await expect(page.locator('.session-card[data-function-id="OCF-FND-004"] [data-playback-status]')).toContainText('Paused at 0:00');
+  await relax.getByRole('link', {name: 'Relax', exact: true}).click();
+  await page.goBack();
+  await expect(page).toHaveURL(/\/$/);
+  zeroPositionPlayer = page.locator('.session-card[data-function-id="OCF-FND-004"] audio');
+  await expect(zeroPositionPlayer).toBeAttached();
+  expect(await zeroPositionPlayer.evaluate(audio => audio.paused && audio.currentTime === 0)).toBe(true);
+  await zeroPositionPlayer.evaluate(audio => { audio.dataset.fixtureIdentity = 'back-navigation-synthetic-wav'; });
+  const zeroResumeControl = page.locator('.session-card[data-function-id="OCF-FND-004"] [data-back-navigation-control]');
+  if (await zeroResumeControl.count() === 0) {
+    await page.locator('.session-card[data-function-id="OCF-FND-004"]').evaluate(card => {
+      const audio = card.querySelector('audio');
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.dataset.backNavigationControl = '';
+      button.textContent = 'Resume from zero synthetic fixture';
+      button.addEventListener('click', async () => { if (audio.paused) await audio.play(); else audio.pause(); });
+      card.append(button);
+    });
+  }
+  await zeroResumeControl.focus();
+  await page.keyboard.press('Enter');
+  await expect.poll(() => zeroPositionPlayer.evaluate(audio => !audio.paused && audio.currentTime < 0.5)).toBe(true);
+  await expect(zeroPositionPlayer).not.toHaveAttribute('data-ocf-restored-bookmark-pending');
+  await page.keyboard.press('Enter');
+  await expect.poll(() => zeroPositionPlayer.evaluate(audio => audio.paused)).toBe(true);
+
+  await secondRestorePlayer.evaluate(audio => { audio.currentTime = audio.duration - 0.5; });
+  await expect.poll(() => secondRestorePlayer.evaluate(audio => audio.paused && audio.currentTime > 2.4)).toBe(true);
+  await restoredControl.focus();
+  await page.keyboard.press('Enter');
+  await expect.poll(() => secondRestorePlayer.evaluate(audio => audio.ended), {timeout: 5000}).toBe(true);
+  await expect(relax.locator('[data-playback-status]')).toContainText('Playback ended');
+  await relax.getByRole('link', {name: 'Relax', exact: true}).click();
+  await expect(page).toHaveURL(/\/functions\/OCF-FND-004\/$/);
+  await page.goBack();
+  await expect(page).toHaveURL(/\/$/);
+  const endedPlayer = page.locator('.session-card[data-function-id="OCF-FND-004"] audio');
+  await expect(endedPlayer).toBeAttached();
+  await expect(page.locator('#search')).toHaveValue('OCF-BOD-001');
+  expect(await endedPlayer.evaluate(audio => audio.paused && !audio.ended)).toBe(true);
+  await expect(page.locator('.session-card[data-function-id="OCF-FND-004"] [data-playback-status]')).toContainText('Playback ended');
+  let replayControl = page.locator('.session-card[data-function-id="OCF-FND-004"] [data-back-navigation-control]');
+  if (await replayControl.count() === 0) {
+    await page.locator('.session-card[data-function-id="OCF-FND-004"]').evaluate(card => {
+      const audio = card.querySelector('audio');
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.dataset.backNavigationControl = '';
+      button.textContent = 'Replay synthetic back-navigation fixture';
+      button.addEventListener('click', async () => { if (audio.paused || audio.ended) await audio.play(); else audio.pause(); });
+      card.append(button);
+    });
+    replayControl = page.locator('.session-card[data-function-id="OCF-FND-004"] [data-back-navigation-control]');
+  }
+  await replayControl.focus();
+  await page.keyboard.press('Enter');
+  await expect.poll(() => endedPlayer.evaluate(audio => !audio.paused && !audio.ended)).toBe(true);
+  await expect.poll(() => endedPlayer.evaluate(audio => audio.currentTime < 0.5)).toBe(true);
+  await page.keyboard.press('Enter');
+  await expect.poll(() => endedPlayer.evaluate(audio => audio.paused)).toBe(true);
+
+  await endedPlayer.evaluate(audio => { audio.currentTime = audio.duration - 0.5; });
+  await expect.poll(() => endedPlayer.evaluate(audio => audio.currentTime > 2.4 && !audio.seeking)).toBe(true);
+  await replayControl.focus();
+  await page.keyboard.press('Enter');
+  await expect.poll(() => endedPlayer.evaluate(audio => audio.ended), {timeout: 5000}).toBe(true);
+  await endedPlayer.evaluate(audio => { audio.currentTime = 1.25; });
+  await expect.poll(() => page.evaluate(() => {
+    const saved = JSON.parse(sessionStorage.getItem('ocf-library-playback:/') || 'null');
+    return saved?.ended === false && saved?.positionIsExplicit === true && saved.position > 1;
+  })).toBe(true);
+  await relax.getByRole('link', {name: 'Relax', exact: true}).click();
+  await expect(page).toHaveURL(/\/functions\/OCF-FND-004\/$/);
+  await page.goBack();
+  await expect(page).toHaveURL(/\/$/);
+  let soughtAfterEndPlayer = page.locator('.session-card[data-function-id="OCF-FND-004"] audio');
+  await expect(soughtAfterEndPlayer).toBeAttached();
+  await expect.poll(() => soughtAfterEndPlayer.getAttribute('data-ocf-resume-position')).toBe('1.25');
+  await expect(soughtAfterEndPlayer).toHaveAttribute('data-ocf-restored-bookmark-pending', 'true');
+  expect(await soughtAfterEndPlayer.evaluate(audio => audio.paused && !audio.ended)).toBe(true);
+  await expect(page.locator('.session-card[data-function-id="OCF-FND-004"] [data-playback-status]')).toContainText('Paused at 0:01');
+  await relax.getByRole('link', {name: 'Relax', exact: true}).click();
+  await page.goBack();
+  await expect(page).toHaveURL(/\/$/);
+  soughtAfterEndPlayer = page.locator('.session-card[data-function-id="OCF-FND-004"] audio');
+  await expect.poll(() => soughtAfterEndPlayer.getAttribute('data-ocf-resume-position')).toBe('1.25');
+  await expect(soughtAfterEndPlayer).toHaveAttribute('data-ocf-restored-bookmark-pending', 'true');
+  expect(await soughtAfterEndPlayer.evaluate(audio => audio.paused && !audio.ended)).toBe(true);
+  expect(audioResponses.filter(response => response.status >= 200 && response.status < 300)).toEqual([]);
+});
+
 test('catalog selection and download controls identify session and format', async ({ page }) => {
   await page.goto('/');
   for (const title of ['Relax', 'Brain Flow']) {
@@ -606,6 +816,276 @@ test('catalog selection and download controls identify session and format', asyn
       await expect(card.getByRole('link', { name: new RegExp(`^Download ${format} for ${title},`) })).toBeAttached();
     }
   }
+});
+
+test('catalog keeps one synthetic player active and announces a controlled media error', async ({ page }) => {
+  const audioRequests = [];
+  page.on('request', request => { if (/\.(?:mp3|flac)(?:$|[?#])/i.test(request.url())) audioRequests.push(request.url()); });
+  await useSilentWavFixture(page);
+  await page.goto('/');
+  const relax = page.locator('.session-card').filter({ has: page.getByRole('link', { name: 'Relax', exact: true }) });
+  const brain = page.locator('.session-card').filter({ has: page.getByRole('link', { name: 'Brain Flow', exact: true }) });
+  const relaxPlayer = relax.locator('audio');
+  const brainPlayer = brain.locator('audio');
+  await Promise.all([relaxPlayer.evaluate(audio => audio.load()), brainPlayer.evaluate(audio => audio.load())]);
+  await expect.poll(() => relaxPlayer.evaluate(audio => audio.duration)).toBeGreaterThan(2.9);
+  await expect.poll(() => brainPlayer.evaluate(audio => audio.duration)).toBeGreaterThan(2.9);
+
+  const addFixtureControl = async (card, label) => {
+    await card.evaluate((element, buttonLabel) => {
+      const player = element.querySelector('audio');
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.textContent = buttonLabel;
+      button.dataset.syntheticPlayControl = '';
+      button.addEventListener('click', async () => {
+        if (player.paused || player.ended) await player.play();
+        else player.pause();
+      });
+      element.append(button);
+    }, label);
+    return card.locator('[data-synthetic-play-control]');
+  };
+  const relaxControl = await addFixtureControl(relax, 'Play synthetic Relax fixture');
+  const brainControl = await addFixtureControl(brain, 'Play synthetic Brain Flow fixture');
+
+  for (const [control, active, other] of [
+    [relaxControl, relaxPlayer, brainPlayer],
+    [brainControl, brainPlayer, relaxPlayer],
+    [relaxControl, relaxPlayer, brainPlayer],
+    [brainControl, brainPlayer, relaxPlayer],
+  ]) {
+    await control.focus();
+    await page.keyboard.press('Enter');
+    await expect.poll(() => active.evaluate(audio => !audio.paused && !audio.ended)).toBe(true);
+    await expect.poll(() => other.evaluate(audio => audio.paused)).toBe(true);
+    expect(await page.locator('.session-card audio').evaluateAll(players => players.filter(audio => !audio.paused && !audio.ended).length)).toBe(1);
+  }
+  await brainControl.focus();
+  await page.keyboard.press('Enter');
+  await expect.poll(() => relaxPlayer.evaluate(audio => audio.paused)).toBe(true);
+  await expect.poll(() => brainPlayer.evaluate(audio => audio.paused)).toBe(true);
+
+  await relaxPlayer.evaluate(audio => {
+    Object.defineProperty(audio, 'error', { configurable: true, value: { code: 4 } });
+    audio.dispatchEvent(new Event('error'));
+  });
+  await expect(relax.locator('[data-playback-status]')).toContainText('Audio could not be played');
+  await expect(relax.getByRole('link', { name: /^Download MP3 for Relax/ })).toBeAttached();
+  expect(audioRequests).toEqual([]);
+});
+
+test('selected files hidden by filters remain reviewable and removable', async ({ page }) => {
+  await page.goto('/');
+  const relax = page.locator('.session-card').filter({ has: page.getByRole('link', { name: 'Relax', exact: true }) });
+  const brain = page.locator('.session-card').filter({ has: page.getByRole('link', { name: 'Brain Flow', exact: true }) });
+  const catalog = await page.request.get('/catalog.json').then(response => response.json());
+  const relaxMp3Asset = catalog.releases.flatMap(release => release.functions)
+    .find(row => row.function_id === 'OCF-FND-004').sessions[0].assets.find(asset => asset.format === 'mp3');
+  const relaxAssetURL = relaxMp3Asset.download_url;
+  const relaxMp3 = page.locator(`[data-selected-asset-id="${relaxMp3Asset.asset_id}"]`);
+  const brainFlac = brain.getByRole('checkbox', { name: /^Select FLAC for Brain Flow,/ });
+  await relaxMp3.check();
+  await brainFlac.check();
+  await expect(page.locator('#selection-count')).toHaveText('2 files selected');
+  const review = page.locator('#selected-files-review');
+  await expect(review).toBeVisible();
+
+  await page.locator('#search').fill('OCF-BOD-001');
+  await expect(relax).toBeHidden();
+  await expect(page.locator('#selection-count')).toHaveText('2 files selected (1 hidden by filters)');
+  await review.locator('summary').click();
+  await expect(review.locator('#selected-files-summary')).toContainText('1 hidden by filters');
+  await expect(review).toContainText('Relax, en-US, Mike — Original Voice, edition 0.1.0 — MP3 (hidden by filters)');
+  await expect(review.getByRole('link', { name: 'Open MP3 download for Relax, en-US, edition 0.1.0' })).toHaveAttribute('href', relaxAssetURL);
+
+  await review.getByRole('button', { name: 'Remove MP3 for Relax, edition 0.1.0 from selected files' }).click();
+  await expect(page.locator('#selection-count')).toHaveText('1 file selected');
+  expect(await relaxMp3.evaluate(checkbox => checkbox.checked)).toBe(false);
+  await expect(page.locator('#selection-count')).toBeFocused();
+  await page.locator('#clear-library-filters').click();
+  await expect(relax).toBeVisible();
+  await expect(review.locator('#selected-files-summary')).toContainText('Review selected files (1)');
+  await page.locator('#clear-selection').click();
+  await expect(page.locator('#selection-count')).toHaveText('0 files selected');
+  await expect(review).toBeHidden();
+  await expect(page.locator('#selection-count')).toBeFocused();
+  expect(await brainFlac.evaluate(checkbox => checkbox.checked)).toBe(false);
+
+  await brain.getByRole('checkbox', { name: /^Select MP3 for Brain Flow,/ }).check();
+  await brainFlac.check();
+  await page.locator('#clear-selection').click();
+  await expect(page.locator('#selection-count')).toHaveText('0 files selected');
+  await expect(page.locator('#selection-count')).toBeFocused();
+  expect(await brain.getByRole('checkbox', { name: /^Select MP3 for Brain Flow,/ }).evaluate(checkbox => checkbox.checked)).toBe(false);
+});
+
+test('function titles expose direct Listen/MP3/FLAC actions for each published edition', async ({ page }) => {
+  await page.goto('/functions/OCF-FND-004/');
+  const catalog = await page.request.get('/catalog.json').then(response => response.json());
+  const session = catalog.releases.flatMap(release => release.functions)
+    .find(row => row.function_id === 'OCF-FND-004').sessions[0];
+  const anchorAsset = session.assets[0];
+  const actions = page.locator('.function-audio-actions');
+  const label = `Relax, en-US, edition ${session.edition}`;
+  await expect(actions).toBeVisible();
+  await expect(actions.getByRole('link', { name: `Listen to ${label}` })).toHaveAttribute('href', `#session-${anchorAsset.asset_id}`);
+  for (const format of ['mp3', 'flac']) {
+    const asset = session.assets.find(row => row.format === format);
+    await expect(actions.getByRole('link', { name: `Download ${format.toUpperCase()} for ${label}` })).toHaveAttribute('href', asset.download_url);
+  }
+  await expect(page.locator(`#session-${anchorAsset.asset_id} audio`)).toBeAttached();
+  await noAxeViolations(page, '.function-audio-actions');
+});
+
+test('bounded public release MP3 playback or unavailable-media fallback is verified in this browser', async ({ page, browserName }) => {
+  test.skip(process.env.OCF_REAL_AUDIO_TESTS !== '1', 'Set OCF_REAL_AUDIO_TESTS=1 to allow a capped public release-media probe.');
+  test.setTimeout(90000);
+  const catalog = await page.request.get('/catalog.json').then(response => response.json());
+  const fn = catalog.releases.flatMap(release => release.functions).find(row => row.function_id === 'OCF-FND-004');
+  const session = fn.sessions.find(row => row.title === 'Relax');
+  const asset = session.assets.find(row => row.format === 'mp3');
+  const anchorAsset = session.assets[0];
+  expect(asset).toBeTruthy();
+  expect(asset.sha256).toMatch(/^[a-f0-9]{64}$/);
+  expect(asset.size_bytes).toBeGreaterThan(0);
+  const maxRangeBytes = 256 * 1024;
+  const maxRequests = 32;
+  const maxTotalBytes = maxRangeBytes * maxRequests;
+  let budgetExceeded = false;
+  const ranges = [];
+  const rangeResponses = [];
+  const mediaRequests = [];
+  const mediaFailures = [];
+  const audioResponses = [];
+  const budgetFailures = [];
+  const matchesAudioURL = rawURL => {
+    try { return decodeURIComponent(rawURL).includes(asset.filename); }
+    catch (_) { return false; }
+  };
+  await page.route(url => matchesAudioURL(url.href), async route => {
+    if (ranges.length >= maxRequests) {
+      budgetExceeded = true;
+      budgetFailures.push('request-count-cap');
+      await route.abort();
+      return;
+    }
+    const headers = route.request().headers();
+    const match = /^bytes=(\d+)-(\d*)$/i.exec(headers.range || 'bytes=0-');
+    if (!match) {
+      budgetExceeded = true;
+      budgetFailures.push(`unsupported-range:${headers.range || 'missing'}`);
+      await route.abort();
+      return;
+    }
+    const start = Number(match[1]);
+    const requestedEnd = match[2] ? Number(match[2]) : start + maxRangeBytes - 1;
+    const end = Math.min(requestedEnd, start + maxRangeBytes - 1, asset.size_bytes - 1);
+    if (end < start) {
+      budgetExceeded = true;
+      budgetFailures.push(`invalid-range:${start}-${end}`);
+      await route.abort();
+      return;
+    }
+    headers.range = `bytes=${start}-${end}`;
+    ranges.push({host: new URL(route.request().url()).hostname, start, end});
+    await route.continue({headers});
+  });
+  page.on('request', request => {
+    if (!matchesAudioURL(request.url())) return;
+    const url = new URL(request.url());
+    mediaRequests.push({host: url.hostname, resourceType: request.resourceType(), range: request.headers().range || null});
+  });
+  page.on('requestfailed', request => {
+    if (!matchesAudioURL(request.url())) return;
+    const url = new URL(request.url());
+    mediaFailures.push({host: url.hostname, error: request.failure()?.errorText || 'unknown'});
+  });
+  page.on('response', response => {
+    if (!matchesAudioURL(response.url())) return;
+    const headers = response.headers();
+    const url = new URL(response.url());
+    audioResponses.push({host: url.hostname, status: response.status(), resourceType: response.request().resourceType(), contentType: headers['content-type'] || null, contentRange: headers['content-range'] || null});
+    const contentRange = /^bytes (\d+)-(\d+)\/(\d+)$/i.exec(headers['content-range'] || '');
+    if (contentRange) rangeResponses.push({host: url.hostname, status: response.status(), start: Number(contentRange[1]), end: Number(contentRange[2]), total: Number(contentRange[3])});
+  });
+  const assertMediaBudget = () => {
+    expect(budgetExceeded, `bounded public media request guard: ${budgetFailures.join(', ')} (${ranges.length} ranges)`).toBe(false);
+    expect(ranges.length).toBeGreaterThan(0);
+    expect(ranges.length).toBeLessThanOrEqual(maxRequests);
+    expect(ranges.every(range => range.end - range.start + 1 <= maxRangeBytes)).toBe(true);
+    expect(rangeResponses.length).toBeGreaterThan(0);
+    expect(rangeResponses.every(range => range.status === 206 && range.end - range.start + 1 <= maxRangeBytes && range.total === asset.size_bytes)).toBe(true);
+    const bytes = rangeResponses.reduce((total, range) => total + range.end - range.start + 1, 0);
+    expect(bytes).toBeLessThanOrEqual(maxTotalBytes);
+    return bytes;
+  };
+
+  await page.goto('/functions/OCF-FND-004/');
+  const actions = page.locator('.function-audio-actions');
+  const editionLabel = `Relax, en-US, edition ${session.edition}`;
+  await expect(actions.getByRole('link', {name: `Listen to ${editionLabel}`})).toHaveAttribute('href', `#session-${anchorAsset.asset_id}`);
+  await expect(actions.getByRole('link', {name: `Download MP3 for ${editionLabel}`})).toHaveAttribute('href', asset.download_url);
+  const player = page.locator(`#session-${anchorAsset.asset_id} audio`);
+  const playbackStatus = page.locator(`#session-${anchorAsset.asset_id} [data-playback-status]`);
+  await expect(player).toHaveAttribute('preload', 'none');
+  await expect(player.locator('source')).toHaveAttribute('src', asset.download_url);
+  await player.evaluate(audio => audio.load());
+  let metadataReady = false;
+  try {
+    await expect.poll(() => player.evaluate(audio => Number.isFinite(audio.duration) && audio.readyState >= HTMLMediaElement.HAVE_METADATA), {timeout: 12000}).toBe(true);
+    metadataReady = true;
+  } catch (error) {
+    if (browserName !== 'webkit') {
+      const state = await player.evaluate(audio => ({readyState: audio.readyState, networkState: audio.networkState, duration: audio.duration, error: audio.error?.code || null}));
+      throw new Error(`Public audio metadata did not load: ${JSON.stringify({state, mediaRequests, mediaFailures, audioResponses, ranges, rangeResponses})}; ${error.message}`);
+    }
+    const state = await player.evaluate(audio => ({readyState: audio.readyState, networkState: audio.networkState, noSource: audio.networkState === HTMLMediaElement.NETWORK_NO_SOURCE, duration: audio.duration, error: audio.error?.code || null}));
+    expect(state.readyState, `WebKit must surface native unavailability: ${JSON.stringify(state)}`).toBe(0);
+    expect(state.noSource).toBe(true);
+    await expect(playbackStatus).toContainText('Audio could not be played', {timeout: 3000});
+    await expect(actions.getByRole('link', {name: `Download MP3 for ${editionLabel}`})).toHaveAttribute('href', asset.download_url);
+    const bytes = assertMediaBudget();
+    console.log(`WebKit direct-media outcome: browser could not select this release stream; accessible error and direct download are available. ${rangeResponses.length} HTTP 206 ranges, ${bytes} bytes, each capped at ${maxRangeBytes}.`);
+    return;
+  }
+  expect(metadataReady).toBe(true);
+  expect(await player.evaluate(audio => audio.duration)).toBeGreaterThan(1000);
+
+  await page.locator('.page-intro').evaluate(intro => {
+    const player = document.querySelector('.edition-card audio');
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.dataset.publicMediaProbe = '';
+    button.textContent = 'Start bounded public playback probe';
+    button.addEventListener('click', async () => {
+      if (player.paused || player.ended) await player.play();
+      else player.pause();
+    });
+    intro.append(button);
+  });
+  const probe = page.locator('[data-public-media-probe]');
+  await probe.focus();
+  await page.keyboard.press('Enter');
+  await expect.poll(() => player.evaluate(audio => !audio.paused && !audio.ended), {timeout: 12000}).toBe(true);
+  await expect.poll(() => player.evaluate(audio => audio.currentTime), {timeout: 12000}).toBeGreaterThan(0.5);
+  await page.keyboard.press('Enter');
+  await expect.poll(() => player.evaluate(audio => audio.paused), {timeout: 5000}).toBe(true);
+  const pausedAt = await player.evaluate(audio => audio.currentTime);
+  const seekTo = pausedAt + 5;
+  await player.evaluate((audio, target) => { audio.currentTime = target; }, seekTo);
+  await expect.poll(() => player.evaluate((audio, target) => !audio.seeking && audio.currentTime >= target - 0.25, seekTo), {timeout: 15000}).toBe(true);
+  const seekedTo = await player.evaluate(audio => audio.currentTime);
+  expect(seekedTo).toBeGreaterThanOrEqual(seekTo - 0.25);
+  await page.keyboard.press('Enter');
+  await expect.poll(() => player.evaluate(audio => !audio.paused && !audio.ended), {timeout: 8000}).toBe(true);
+  await expect.poll(() => player.evaluate((audio, previous) => audio.currentTime > previous + 0.25, seekedTo), {timeout: 10000}).toBe(true);
+  await page.keyboard.press('Enter');
+  await expect.poll(() => player.evaluate(audio => audio.paused), {timeout: 5000}).toBe(true);
+
+  const boundedResponseBytes = assertMediaBudget();
+  console.log(`Public release media probe (${asset.format}): ${rangeResponses.length} HTTP 206 ranges, ${boundedResponseBytes} response bytes; per-range cap ${maxRangeBytes}, total cap ${maxTotalBytes}.`);
+  await expect(playbackStatus).toContainText('Paused at');
 });
 
 test('Android-like touch users can open and follow the primary mobile navigation', async ({ browser, browserName }) => {
