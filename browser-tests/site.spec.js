@@ -165,7 +165,7 @@ test('historical names appear only in their source-authoritative lookup page', a
   await expect(strong).toHaveAttribute('data-historical-kind', 'former-primary');
   await expect(strong).toHaveAttribute('data-also-current', 'false');
   await expect(strong.locator('.historical-name-kind')).toHaveText('Former primary cue');
-  await expect(page.locator('a[href*="OCF_HISTORICAL_LOOKUP_CURRENT.md"]')).toHaveAttribute('href', /7e6bfee3b3536ecf585c6dcb5e590e61f5454180/);
+  await expect(page.locator('a[href*="OCF_HISTORICAL_LOOKUP_CURRENT.md"]')).toHaveAttribute('href', /704440da8e0379cee8dfd332203bc0001c0a5f27/);
   await expect(page.getByText('A match never selects an activation target.')).toBeVisible();
   const unmapped = page.locator('.page-intro');
   await expect(unmapped).toContainText('these 15 functions');
