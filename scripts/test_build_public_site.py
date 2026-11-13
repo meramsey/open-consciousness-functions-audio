@@ -15,6 +15,7 @@ from build_public_site import (
     _asset_specification,
     _catalog_sessions,
     _discovery_section,
+    _downloads_page,
     _function_page,
     _historical_names_page,
     _inline,
@@ -22,6 +23,7 @@ from build_public_site import (
     _public_description,
     _quick_reference,
     _recommended_settings,
+    _shell,
     _request_public_asset,
     _suggested_download_filename,
     _validate_suggested_download_filenames,
@@ -34,6 +36,117 @@ from build_public_site import (
 
 
 class PublicSiteBuildTests(unittest.TestCase):
+    def test_download_directory_cards_are_responsive_and_contextual(self):
+        groups = []
+        for function_id, title in (("OCF-FND-004", "Relax"), ("OCF-BOD-001", "Brain Flow")):
+            assets = [
+                {
+                    "asset_id": f"{function_id}-{fmt}",
+                    "format": fmt,
+                    "filename": f"{function_id}.{fmt}",
+                    "encoding": encoding,
+                    "download_url": f"https://github.com/example/{function_id}.{fmt}",
+                    "sha256": "a" * 64 if fmt == "mp3" else "b" * 64,
+                    "size_bytes": 1_000_000,
+                    "duration_seconds": 120,
+                }
+                for fmt, encoding in (("mp3", "MP3 320 kbps"), ("flac", "FLAC lossless"))
+            ]
+            groups.append({
+                "function_id": function_id,
+                "title": title,
+                "sessions": [{
+                    "title": title,
+                    "locale": "en-US",
+                    "voice_name": "Example Voice",
+                    "edition": "0.1.0",
+                    "assets": assets,
+                }],
+            })
+        page = _downloads_page({"releases": [{
+            "version": "0.1.0",
+            "tag": "audio-test-release",
+            "release_url": "https://github.com/example/release",
+            "functions": groups,
+            "preparations": [],
+        }]}, [])
+
+        self.assertEqual(page.count('class="download-card"'), 2)
+        self.assertNotIn("reference-table", page)
+        for title, function_id in (("Relax", "OCF-FND-004"), ("Brain Flow", "OCF-BOD-001")):
+            for fmt in ("MP3", "FLAC"):
+                self.assertIn(
+                    f'aria-label="Download {fmt} for {title}, en-US, Example Voice, edition 0.1.0"',
+                    page,
+                )
+                self.assertIn(f'href="https://github.com/example/{function_id}.{fmt.lower()}"', page)
+            self.assertIn(f"{function_id}.mp3", page)
+            self.assertIn(f"{function_id}.flac", page)
+        self.assertIn("audio-test-release", page)
+        self.assertIn("320 kbps", page)
+        self.assertNotIn("MP3 · MP3", page)
+        self.assertNotIn("FLAC · flac", page)
+
+    def test_shell_navigation_keeps_routes_and_marks_current_location(self):
+        page = _shell("Function list", "<p>Directory</p>", "functions", "a" * 40)
+        for href in (
+            "../start/", "../functions/", "../quick-reference/", "../listening/",
+            "../historical-names/", "../relationships/", "../index.html#library", "../downloads/", "../about/",
+        ):
+            self.assertIn(f'href="{href}"', page)
+        self.assertIn('<a href="../functions/" aria-current="page">Browse &amp; Listen</a>', page)
+        detail = _shell("Function", "<p>Detail</p>", "functions/OCF-BOD-001", "a" * 40)
+        self.assertIn('<a href="../../functions/" aria-current="location">Browse &amp; Listen</a>', detail)
+        self.assertIn('<details class="more-menu">', page)
+
+    def test_download_directory_cards_preserve_each_format_with_contextual_names(self):
+        sessions = []
+        for function_id, title in (
+            ("OCF-FND-004", "Relax"),
+            ("OCF-BOD-001", "Brain Flow"),
+        ):
+            assets = [
+                {
+                    "asset_id": f"{function_id}-{fmt}",
+                    "format": fmt,
+                    "filename": f"{function_id}.{fmt}",
+                    "encoding": encoding,
+                    "download_url": f"https://github.com/example/{function_id}.{fmt}",
+                    "sha256": "a" * 64 if fmt == "mp3" else "b" * 64,
+                    "size_bytes": 1_000_000,
+                    "duration_seconds": 120,
+                }
+                for fmt, encoding in (("mp3", "MP3 320 kbps"), ("flac", "FLAC lossless"))
+            ]
+            sessions.append({
+                "function_id": function_id,
+                "title": title,
+                "sessions": [{
+                    "title": title,
+                    "locale": "en-US",
+                    "voice_name": "Example Voice",
+                    "edition": "0.1.0",
+                    "assets": assets,
+                }],
+            })
+        page = _downloads_page({"releases": [{
+            "version": "0.1.0",
+            "tag": "audio-test-release",
+            "release_url": "https://github.com/example/release",
+            "functions": sessions,
+            "preparations": [],
+        }]}, [])
+
+        self.assertEqual(page.count('class="download-card"'), 2)
+        self.assertNotIn("reference-table", page)
+        for title, function_id in (("Relax", "OCF-FND-004"), ("Brain Flow", "OCF-BOD-001")):
+            for fmt in ("MP3", "FLAC"):
+                self.assertIn(f'Download {fmt} for {title}, en-US, Example Voice, edition 0.1.0', page)
+                self.assertIn(f'href="https://github.com/example/{function_id}.{fmt.lower()}"', page)
+            self.assertIn(f"{function_id}.mp3", page)
+            self.assertIn(f"{function_id}.flac", page)
+        self.assertIn("audio-test-release", page)
+
     def test_render_markdown_keeps_wrapped_ordered_steps_semantic(self):
         rendered = render_markdown(
             "## Suggested way to explore\n\n"

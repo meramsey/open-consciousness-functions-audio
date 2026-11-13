@@ -11,14 +11,19 @@ const card = {
     voice: 'Mike — Original Voice',
   },
 };
-assert.equal(normalize('ＰＬＵＳ-ＲＥＬＡＸ'), 'plus-relax');
+assert.equal(normalize('  ＰＬＵＳ—ＲＥＬＡＸ  '), 'plus relax');
 assert.equal(matches(card, 'PLUS-RELAX'), true);
+assert.equal(matches(card, '  Plus   Relax  '), true);
 assert.equal(matches(card, '', 'foundation', 'yes', 'en-US', 'Mike — Original Voice'), true);
 assert.equal(matches(card, '', 'cognition'), false);
 assert.equal(matches(card, '', '', 'no'), false);
 assert.equal(matches(card, '', '', '', 'fr-FR'), false);
 assert.equal(matches(card, '', '', '', 'en-US', 'Mike — Original Voice'), true);
+const innerPower = {dataset: {search: 'OCF-PRF-002 Inner Power Plus Inner Power'}};
+const strongQuick = {dataset: {search: 'OCF-PRF-006 Strong-Quick Plus Strong Quick'}};
+assert.equal(matches(innerPower, 'PLUS-STRONG'), false);
+assert.equal(matches(strongQuick, 'PLUS-STRONG'), true);
 assert.equal(safeTranscript('../../transcripts/asset-a.txt', 'https://example.test/functions/OCF-FND-004/'), 'https://example.test/transcripts/asset-a.txt');
 assert.equal(safeTranscript('https://attacker.test/transcripts/a.txt', 'https://example.test/'), null);
 assert.equal(safeTranscript('../../outside.txt', 'https://example.test/functions/OCF-FND-004/'), null);
-console.log('Documentation UI logic: 10 assertions passed');
+console.log('Documentation UI logic: 13 assertions passed');
