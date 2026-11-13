@@ -6,9 +6,13 @@ headphone, or application effect.
 
 ## Baseline
 
-- Use comfortable stereo headphones or earbuds when the selected edition is
-  designed for separate left and right channels. Keep the left/right balance
-  centered unless you use an accessibility adjustment.
+- Stereo headphones or stereo earbuds with separate left/right playback are
+  required for the intended binaural/channel-separated audio. Speakers, mono
+  mixing, or a single earpiece are not equivalent delivery of that audio. If you
+  cannot use this setup, use the written guide or an edition-matched transcript
+  if available, or skip the audio; no equivalent effects are promised.
+- Keep the left/right balance centered unless you use an accessibility
+  adjustment.
 - Start at a comfortable, clearly audible level and use normal playback speed
   (1.0x). Turn off unwanted repeat, shuffle, crossfade, and optional EQ/effects.
 - Do not raise volume to chase a perceived effect.
@@ -29,9 +33,10 @@ settings** on some systems.
 ## Mono audio and accessibility
 
 Review **Settings → Accessibility → Audio → Mono audio** and channel balance.
-Mono changes stereo separation. Do not disable an accessibility setting you
-need; accessibility takes priority. A text transcript is available for each
-published edition when the release supplies one.
+Mono mixes the left/right channels and is not equivalent delivery of the
+intended binaural/channel-separated audio. Do not disable an accessibility
+setting you need. Use the written guide or an edition-matched transcript if
+available, or skip the audio; no equivalent effects are promised.
 
 ## Player settings and troubleshooting
 
