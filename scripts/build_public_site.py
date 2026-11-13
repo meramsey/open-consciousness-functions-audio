@@ -23,8 +23,7 @@ EXPORTER = "ocf.public-site-guides/1"
 HISTORICAL_LOOKUP_SOURCE = "docs/releases/OCF_HISTORICAL_LOOKUP_CURRENT.md"
 PREPARATION_FIRST_GUIDANCE = (
     "Complete Preparation Learning before using any OCF function. Only people who "
-    "have already learned the official Human Plus preparation track may skip it. "
-    "This skip exception is Michael's instruction, not a verified official OCF policy."
+    "have already learned the official Human Plus preparation track may skip it."
 )
 STALE_CUE_DISTINCTION_NOTE = (
     "Function guides distinguish exact display cues from exact spoken cues. Spelling,\n"

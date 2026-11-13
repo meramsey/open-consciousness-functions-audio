@@ -9,13 +9,12 @@ or explain a complete activation procedure.
 
 ## Preparation Learning
 
-Begin with [Preparation Learning](../preparation-learning/) before using any
-OCF function. The only exception is for people who have already learned the
-official Human Plus preparation track. This skip exception is Michael's explicit
-instruction, not a verified official OCF policy. Preparation Learning is a
-separate introductory session, not one of the 58 function records. Its own
-published edition and matching transcript appear on its page when present in the
-verified release catalog.
+Complete [Preparation Learning](../preparation-learning/) before using any OCF
+function. Only people who have already learned the official Human Plus
+preparation track may skip it. Preparation Learning is a separate introductory
+session, not one of the 58 function records. Its own published edition and
+matching transcript appear on its page when present in the verified release
+catalog.
 
 ## Choose one practice
 
