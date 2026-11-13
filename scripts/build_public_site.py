@@ -20,6 +20,25 @@ from catalog import validate_catalog
 SOURCE_REPOSITORY = "https://github.com/ocfproject-org/open-consciousness-functions"
 SITE_REPOSITORY = "https://github.com/ocfproject-org/open-consciousness-functions-audio"
 EXPORTER = "ocf.public-site-guides/1"
+HISTORICAL_LOOKUP_SOURCE = "docs/releases/OCF_HISTORICAL_LOOKUP_CURRENT.md"
+PREPARATION_FIRST_GUIDANCE = (
+    "Complete Preparation Learning before using any OCF function. Only people who "
+    "have already learned the official Human Plus preparation track may skip it. "
+    "This skip exception is Michael's instruction, not a verified official OCF policy."
+)
+STALE_CUE_DISTINCTION_NOTE = (
+    "Function guides distinguish exact display cues from exact spoken cues. Spelling,\n"
+    "hyphens, and spoken wording can differ. A cue identifies a command; it does not\n"
+    "by itself supply an activation procedure. Where reviewed instructions are absent,\n"
+    "the guide says so rather than guessing breathing, repetition, or timing steps."
+)
+HISTORICAL_LOOKUP_KIND_LABELS = {
+    "former-title": "Former title",
+    "former-primary": "Former primary cue",
+    "former-teaching": "Former teaching phrase",
+    "legacy-phrase": "Legacy phrase",
+}
+PUBLIC_DISCOVERY_STATUSES = {"canonical", "reviewed"}
 FORBIDDEN_PUBLIC_KEYS = {
     "narration",
     "narration_text",
@@ -517,10 +536,17 @@ def build_public_site(
         and not historical_reference.is_symlink(),
         "pinned OCF historical lookup reference is unavailable",
     )
+    historical_reference = historical_reference.resolve()
+    source_root = historical_reference.parents[2]
+    _require(
+        historical_reference.relative_to(source_root).as_posix()
+        == HISTORICAL_LOOKUP_SOURCE,
+        "historical lookup reference must be inside the pinned OCF checkout",
+    )
     historical_reference_bytes = historical_reference.read_bytes()
     historical_reference_markdown = historical_reference_bytes.decode("utf-8")
     historical_rows = _historical_lookup_rows(
-        historical_reference_markdown, functions
+        historical_reference_markdown, functions, source_root
     )
     sessions_by_function, preparation_sessions = _catalog_sessions(catalog)
     all_session_rows = [
@@ -593,6 +619,7 @@ def build_public_site(
         )
         historical_body = _historical_names_page(
             historical_rows,
+            functions,
             source_commit,
             historical_reference_sha256=hashlib.sha256(
                 historical_reference_bytes
@@ -608,11 +635,14 @@ def build_public_site(
             ),
         )
         listening_source = guide_export["listening_guide"]["markdown"]
-        listening_html = render_markdown(listening_source)
+        listening_html = _preparation_first_note() + render_markdown(
+            listening_source.replace(STALE_CUE_DISTINCTION_NOTE, "")
+        )
         listening_html += _recommended_settings(source_commit)
         listening_html += _device_links()
         listening_toc_source = (
-            listening_source
+            "## Preparation Learning first\n\n"
+            + listening_source.replace(STALE_CUE_DISTINCTION_NOTE, "")
             + "\n\n## Recommended audio settings\n\n## Device-specific setup"
         )
         _write(
@@ -704,7 +734,7 @@ def build_public_site(
                     "search_terms": [
                         item["text"]
                         for item in row["tags"] + row["common_uses"]
-                        if item["status"] != "draft"
+                        if item.get("status") in PUBLIC_DISCOVERY_STATUSES
                     ],
                     "audio_available": bool(
                         sessions_by_function.get(row["function_id"])
@@ -744,6 +774,14 @@ def build_public_site(
                 "historical_name_count": sum(
                     len(row["names"]) for row in historical_rows
                 ),
+                "historical_name_kind_counts": {
+                    kind: sum(
+                        name["kind"] == kind
+                        for row in historical_rows
+                        for name in row["names"]
+                    )
+                    for kind in HISTORICAL_LOOKUP_KIND_LABELS
+                },
                 "historical_reference_sha256": hashlib.sha256(
                     historical_reference_bytes
                 ).hexdigest(),
@@ -935,8 +973,8 @@ def _home_page(functions, catalog, source_commit):
     categories = sorted(
         {category["label"] for f in functions for category in f["categories"]}
     )
-    return f"""<section class="hero docs-hero"><div class="hero-copy"><p class="eyebrow">Official public documentation and audio</p><h1 id="home-title">Learn the practice.<br><em>Choose how to listen.</em></h1><p class="hero-lede">Start with Preparation Learning before using any OCF function, unless you have already learned the official Human Plus preparation track. Then explore 58 function guides and published editions when available.</p><div class="hero-actions"><a class="button button-light" href="preparation-learning/">Preparation Learning <span aria-hidden="true">→</span></a><a class="button button-outline-light" href="start/">Start Here</a><a class="button button-outline-light" href="functions/">Browse functions</a><a class="button button-outline-light" href="#library">Listen</a></div></div><div class="hero-index" aria-hidden="true">58 FUNCTIONS · {len(categories)} CANONICAL DOMAINS</div></section>
-<section class="home-paths" aria-labelledby="paths-title"><p class="eyebrow">Choose a path</p><h2 id="paths-title">Read first, listen when ready.</h2><div class="path-grid"><a class="path-card" href="preparation-learning/"><span>01</span><h3>Preparation Learning</h3><p>Begin here before using OCF functions, unless you have already learned the official Human Plus preparation track.</p></a><a class="path-card" href="start/"><span>02</span><h3>Start Here</h3><p>Preparation-first instructions and optional ways to explore.</p></a><a class="path-card" href="listening/"><span>03</span><h3>Listening Guide</h3><p>Comfort, stereo playback, accessibility and device settings.</p></a><a class="path-card" href="quick-reference/"><span>04</span><h3>Quick Reference</h3><p>Find function titles and current spoken cues.</p></a></div></section>
+    return f"""<section class="hero docs-hero"><div class="hero-copy"><p class="eyebrow">Official public documentation and audio</p><h1 id="home-title">Learn the practice.<br><em>Choose how to listen.</em></h1><p class="hero-lede">{_html(PREPARATION_FIRST_GUIDANCE)}</p><div class="hero-actions"><a class="button button-light" href="preparation-learning/">Preparation Learning <span aria-hidden="true">→</span></a><a class="button button-outline-light" href="start/">Start Here</a><a class="button button-outline-light" href="functions/">Browse functions</a><a class="button button-outline-light" href="#library">Listen</a></div></div><div class="hero-index" aria-hidden="true">58 FUNCTIONS · {len(categories)} CANONICAL DOMAINS</div></section>
+<section class="home-paths" aria-labelledby="paths-title"><p class="eyebrow">Choose a path</p><h2 id="paths-title">Read first, listen when ready.</h2><div class="path-grid"><a class="path-card" href="preparation-learning/"><span>01</span><h3>Preparation Learning</h3><p>Begin with this introductory session before any OCF function. The only skip exception is having already learned the official Human Plus preparation track.</p></a><a class="path-card" href="start/"><span>02</span><h3>Start Here</h3><p>Preparation-first instructions and optional function exploration.</p></a><a class="path-card" href="listening/"><span>03</span><h3>Listening Guide</h3><p>Comfort, stereo playback, accessibility and device settings.</p></a><a class="path-card" href="quick-reference/"><span>04</span><h3>Quick Reference</h3><p>Find function titles and current spoken cues.</p></a></div></section>
 <section class="release-banner" id="releases" aria-labelledby="release-title"><div class="release-symbol" aria-hidden="true">↗</div><div><p class="eyebrow">Verified release catalog</p><h2 id="release-title">Loading published editions.</h2><p id="release-description">Release files and checksums are read from the verified catalog.</p></div><a class="text-link" href="https://github.com/ocfproject-org/open-consciousness-functions-audio/releases">All releases <span aria-hidden="true">↗</span></a></section>
 <section class="library-section" id="library" aria-labelledby="library-title"><div class="section-heading"><div><p class="eyebrow">Published editions</p><h2 id="library-title">Listen to available sessions</h2></div><span class="count" id="release-count">Loading verified releases</span></div><p class="section-intro">Function documentation is available independently of audio. Each listed edition retains its release file URLs and checksums.</p><div class="library-tools"><label class="sr-only" for="search">Search sessions by function, cue, tag or use</label><input id="search" type="search" placeholder="Search functions, cues, tags or uses" aria-describedby="results-count"><label for="language-filter">Language <select id="language-filter"><option value="">All languages</option></select></label><label for="voice-filter">Voice <select id="voice-filter"><option value="">All voices</option></select></label></div><div class="empty-state" id="empty-state" role="status"><span class="empty-icon" aria-hidden="true">◌</span><h3>No published audio editions are available in the verified catalog.</h3><p>Documentation remains available in the function library.</p></div><p id="results-count" role="status"></p><div class="selection-tools"><span id="selection-count">0 files selected</span><button id="download-selection" disabled>Save download list</button><button id="playlist-selection" disabled>Save MP3 playlist</button><p>Selections contain links and checksums; the source files remain individual published release assets.</p></div><div id="catalog-results"></div><div id="release-extras"></div></section>
 <section class="home-about"><p class="eyebrow">Open source. Independent by design.</p><p>Function documentation comes from canonical OCF locale resources. Audio availability and download checksums come from verified published release manifests. A published recording's transcript is edition-matched; current function guidance is not a substitute for it.</p><a class="text-link" href="about/">About this library <span aria-hidden="true">→</span></a></section>"""
@@ -986,7 +1024,7 @@ def _functions_index(functions, sessions_by_function):
         search.extend(
             item["text"]
             for item in function["tags"] + function["common_uses"]
-            if item["status"] != "draft"
+            if item.get("status") in PUBLIC_DISCOVERY_STATUSES
         )
         sessions = sessions_by_function.get(function["function_id"], [])
         function_languages = sorted(
@@ -1031,7 +1069,9 @@ def _public_description(function):
     return text
 
 
-def _historical_lookup_rows(markdown, functions):
+def _historical_lookup_rows(markdown, functions, source_root):
+    import yaml
+
     lines = markdown.splitlines()
     starts = [
         index
@@ -1071,8 +1111,45 @@ def _historical_lookup_rows(markdown, functions):
             in {command["display_cue"]["text"] for command in function["commands"]},
             f"historical lookup current cue does not match pinned function commands: {function_id}",
         )
-        names = [name.strip() for name in raw_names.split("; ")]
-        _require(all(names), f"historical lookup has an empty match: {function_id}")
+        locale_path = source_root / function["canonical_resource"]
+        locale_resource = locale_path.resolve()
+        _require(
+            locale_resource.is_relative_to(source_root.resolve())
+            and locale_path.is_file()
+            and not locale_path.is_symlink(),
+            f"historical lookup locale resource is unavailable: {function_id}",
+        )
+        locale_bytes = locale_resource.read_bytes()
+        _require(
+            hashlib.sha256(locale_bytes).hexdigest()
+            == function["canonical_resource_sha256"],
+            f"historical lookup locale resource hash mismatch: {function_id}",
+        )
+        record = yaml.safe_load(locale_bytes)
+        _require(
+            record.get("function_id") == function_id,
+            f"historical lookup locale identity mismatch: {function_id}",
+        )
+        typed_names = record.get("record_metadata", {}).get("historical_lookup", [])
+        source_names = [name.strip() for name in raw_names.split("; ")]
+        _require(
+            [name.get("text") for name in typed_names] == source_names,
+            f"historical lookup names differ from pinned canonical records: {function_id}",
+        )
+        names = []
+        for name in typed_names:
+            kind = name.get("kind")
+            _require(
+                kind in HISTORICAL_LOOKUP_KIND_LABELS,
+                f"historical lookup classification is unknown: {function_id} / {kind}",
+            )
+            names.append(
+                {
+                    "text": name["text"],
+                    "kind": kind,
+                    "label": HISTORICAL_LOOKUP_KIND_LABELS[kind],
+                }
+            )
         seen.add(function_id)
         rows.append({"function_id": function_id, "title": source_title, "names": names})
     _require(rows, "historical lookup reference contains no mapped names")
@@ -1231,7 +1308,11 @@ def _function_page(function, sessions, transcript_paths, source_commit):
 
 
 def _discovery_section(title, values):
-    values = [value for value in values if value["status"] != "draft"]
+    values = [
+        value
+        for value in values
+        if value.get("status") in PUBLIC_DISCOVERY_STATUSES
+    ]
     if not values:
         return ""
     rows = "".join(f"<li>{_html(value['text'])}</li>" for value in values)
@@ -1393,7 +1474,7 @@ def _quick_reference(functions, sessions_by_function):
         searchable.extend(
             term["text"]
             for term in function["tags"] + function["common_uses"]
-            if term["status"] != "draft"
+            if term.get("status") in PUBLIC_DISCOVERY_STATUSES
         )
         for command in function["commands"]:
             spoken = command.get("spoken_cue")
@@ -1416,20 +1497,39 @@ def _quick_reference(functions, sessions_by_function):
     return f"""<header class="page-intro"><p class="eyebrow">Approved spoken cues</p><h1>Quick Reference</h1><p>Find a spoken cue; use the function's documented steps rather than inferring a procedure from its name.</p></header><div class="reference-tools"><label for="reference-search">Search title, ID, spoken cue or description</label><input id="reference-search" type="search" data-reference-search><label for="reference-category">Canonical domain</label><select id="reference-category" data-reference-category><option value="">All domains</option>{options}</select><output data-reference-count aria-live="polite">58 functions</output></div><div class="table-scroll"><table class="reference-table"><thead><tr><th scope="col">Function</th><th scope="col">Current spoken cues</th><th scope="col">Description</th><th scope="col">Audio availability</th></tr></thead><tbody>{"".join(rows)}</tbody></table></div>"""
 
 
-def _historical_names_page(rows, source_commit, *, historical_reference_sha256):
+def _historical_names_page(
+    rows, functions, source_commit, *, historical_reference_sha256
+):
     entries = "".join(
-        f'''<article class="historical-name-entry" data-historical-name-entry data-function-id="{_html(row["function_id"])}"><h2><a href="../functions/{_html(row["function_id"])}/">{_html(row["title"])}</a> <span class="stable-id">{_html(row["function_id"])}</span></h2><ul>{"".join(f"<li>{_html(name)}</li>" for name in row["names"])}</ul></article>'''
+        f'''<article class="historical-name-entry" data-historical-name-entry data-function-id="{_html(row["function_id"])}"><h2><a href="../functions/{_html(row["function_id"])}/">{_html(row["title"])}</a> <span class="stable-id">{_html(row["function_id"])}</span></h2><ul>{"".join(f'<li data-historical-kind="{_html(name["kind"])}"><span class="historical-name-kind">{_html(name["label"])}</span> <span>{_html(name["text"])}</span></li>' for name in row["names"])}</ul></article>'''
         for row in rows
     )
     source_url = (
         f"{SOURCE_REPOSITORY}/blob/{source_commit}/"
         "docs/releases/OCF_HISTORICAL_LOOKUP_CURRENT.md"
     )
+    mapped_ids = {row["function_id"] for row in rows}
+    unmapped = [
+        function
+        for function in functions
+        if function["function_id"] not in mapped_ids
+    ]
+    unmapped_items = "".join(
+        f'<li><a href="../functions/{_html(function["function_id"])}/">{_html(function["title"]["text"])}</a> <span class="stable-id">{_html(function["function_id"])}</span></li>'
+        for function in unmapped
+    )
     return (
         '<header class="page-intro"><p class="eyebrow">Historical lookup only</p>'
         '<h1>Historical names</h1><p>These are only the historical matches listed in '
-        'the pinned OCF reference. They are for lookup; a match never selects an '
-        'activation target. Use the current function guide for current instructions.</p>'
+        'the pinned OCF reference. Each type label comes from the canonical '
+        'historical_lookup.kind field; types are not inferred from the spelling. '
+        'They are for lookup; a match never selects an activation target. Use the '
+        'current function guide for current instructions.</p>'
+        f'<p>The pinned reference contains mappings for {len(rows)} functions and '
+        f'{sum(len(row["names"]) for row in rows)} historical strings. It has no '
+        f'mapping for these {len(unmapped)} functions:</p><ul>{unmapped_items}</ul>'
+        '<p>Absence from this reference does not establish that no historical '
+        'counterpart exists.</p>'
         f'<p class="source-link">Source: <a href="{_html(source_url)}">OCF historical lookup at pinned commit {source_commit[:12]}</a> · SHA-256 <code>{historical_reference_sha256}</code></p></header>'
         f'<div class="historical-name-grid">{entries}</div>'
     )
@@ -1473,7 +1573,17 @@ def _preparation_page(rows, transcript_paths):
     )
     if not sessions:
         sessions = '<p class="no-audio">Preparation Learning documentation is separate from function guides. No published edition is present in the verified catalog.</p>'
-    return f'<nav class="breadcrumbs" aria-label="Breadcrumb"><a href="../">Home</a> / Preparation Learning</nav><header class="page-intro"><p class="eyebrow">Separate introductory session</p><h1>Preparation Learning</h1><p>This published session is separate from the 58 canonical function records. Its transcript, when available, is tied to the exact selected audio edition. Follow only the instructions in that published session.</p></header><section class="guide-section"><h2>Listen to an available edition</h2>{sessions}</section><p><a href="../functions/">Browse the 58 function guides</a></p>'
+    return f'<nav class="breadcrumbs" aria-label="Breadcrumb"><a href="../">Home</a> / Preparation Learning</nav><header class="page-intro"><p class="eyebrow">Separate introductory session</p><h1>Preparation Learning</h1><p>{_html(PREPARATION_FIRST_GUIDANCE)}</p><p>This published session is separate from the 58 canonical function records. Its transcript, when available, is tied to the exact selected audio edition. Follow only the instructions in that published session.</p></header><section class="guide-section"><h2>Listen to an available edition</h2>{sessions}</section><p><a href="../functions/">Browse the 58 function guides</a></p>'
+
+
+def _preparation_first_note():
+    return (
+        '<aside class="guide-section preparation-first-note" '
+        'aria-label="Preparation Learning first"><h2 id="preparation-learning-first">Preparation Learning first</h2>'
+        f'<p>{_html(PREPARATION_FIRST_GUIDANCE)}</p>'
+        '<p><a href="../preparation-learning/">Open Preparation Learning</a></p>'
+        '</aside>'
+    )
 
 
 def _downloads_from_catalog(catalog):

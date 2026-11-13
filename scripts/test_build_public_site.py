@@ -4,6 +4,7 @@ import copy
 import hashlib
 import io
 import sys
+import tempfile
 import unittest
 from pathlib import Path
 from unittest.mock import patch
@@ -15,6 +16,7 @@ from build_public_site import (
     _catalog_sessions,
     _discovery_section,
     _function_page,
+    _historical_names_page,
     _inline,
     _historical_lookup_rows,
     _public_description,
@@ -49,26 +51,75 @@ class PublicSiteBuildTests(unittest.TestCase):
         self.assertNotIn("<p>1. ", rendered)
 
     def test_historical_lookup_projection_uses_only_exact_source_names(self):
+        import yaml
+
         function = {
             "function_id": "OCF-SEN-003",
             "title": {"text": "Smell"},
             "commands": [{"display_cue": {"text": "PLUS-SMELL MORE"}}],
+            "canonical_resource": "locales/en-US/OCF-SEN-003-Smell.yaml",
         }
+        record = {
+            "locale": "en-US",
+            "function_id": "OCF-SEN-003",
+            "record_metadata": {
+                "historical_lookup": [
+                    {"text": "Sensory: Smell", "kind": "former-title", "decision": "test"},
+                    {"text": "PLUS-SMELL MORE", "kind": "former-primary", "decision": "test"},
+                ]
+            },
+        }
+        raw_resource = yaml.safe_dump(record, sort_keys=True).encode()
+        function["canonical_resource_sha256"] = hashlib.sha256(raw_resource).hexdigest()
         reference = (
             "# Historical lookup\n\n## Migrated vocabulary\n\n"
             "- OCF-SEN-003 → Smell / `PLUS-SMELL MORE`; "
-            "historical matches: Sensory: Smell.\n"
+            "historical matches: Sensory: Smell; PLUS-SMELL MORE.\n"
         )
-        self.assertEqual(
-            _historical_lookup_rows(reference, [function]),
-            [{"function_id": "OCF-SEN-003", "title": "Smell", "names": ["Sensory: Smell"]}],
-        )
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            resource = root / function["canonical_resource"]
+            resource.parent.mkdir(parents=True)
+            resource.write_bytes(raw_resource)
+            rows = _historical_lookup_rows(reference, [function], root)
+            self.assertEqual(
+                rows,
+                [{
+                    "function_id": "OCF-SEN-003",
+                    "title": "Smell",
+                    "names": [
+                        {"text": "Sensory: Smell", "kind": "former-title", "label": "Former title"},
+                        {"text": "PLUS-SMELL MORE", "kind": "former-primary", "label": "Former primary cue"},
+                    ],
+                }],
+            )
+            page = _historical_names_page(
+                rows,
+                [function],
+                "a" * 40,
+                historical_reference_sha256="b" * 64,
+            )
+            self.assertIn('data-historical-kind="former-title"', page)
+            self.assertIn("Former title", page)
+            self.assertIn("Former primary cue", page)
+            self.assertIn("mappings for 1 functions and 2 historical strings", page)
+            self.assertIn("Absence from this reference does not establish", page)
         wrong_title = reference.replace("→ Smell /", "→ Taste /")
-        with self.assertRaisesRegex(ValueError, "title does not match"):
-            _historical_lookup_rows(wrong_title, [function])
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            resource = root / function["canonical_resource"]
+            resource.parent.mkdir(parents=True)
+            resource.write_bytes(raw_resource)
+            with self.assertRaisesRegex(ValueError, "title does not match"):
+                _historical_lookup_rows(wrong_title, [function], root)
         unknown_target = reference.replace("OCF-SEN-003", "OCF-SEN-004")
-        with self.assertRaisesRegex(ValueError, "unknown function"):
-            _historical_lookup_rows(unknown_target, [function])
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            resource = root / function["canonical_resource"]
+            resource.parent.mkdir(parents=True)
+            resource.write_bytes(raw_resource)
+            with self.assertRaisesRegex(ValueError, "unknown function"):
+                _historical_lookup_rows(unknown_target, [function], root)
 
     def test_draft_discovery_and_pending_procedure_are_hidden_without_mutating_metadata(self):
         function = {
@@ -76,8 +127,16 @@ class PublicSiteBuildTests(unittest.TestCase):
             "title": {"text": "Intuition", "status": "reviewed"},
             "description": {"text": "A documented purpose.", "status": "reviewed"},
             "categories": [],
-            "tags": [{"text": "draft-tag", "status": "draft"}],
-            "common_uses": [{"text": "draft-use", "status": "draft"}],
+            "tags": [
+                {"text": "draft-tag", "status": "draft"},
+                {"text": "machine-tag", "status": "machine"},
+                {"text": "canonical-tag", "status": "canonical"},
+            ],
+            "common_uses": [
+                {"text": "draft-use", "status": "draft"},
+                {"text": "machine-use", "status": "machine"},
+                {"text": "reviewed-use", "status": "reviewed"},
+            ],
             "commands": [{
                 "command_id": "OCF-CMD-EXP-006-PRIMARY",
                 "designation": "primary",
@@ -103,10 +162,17 @@ class PublicSiteBuildTests(unittest.TestCase):
         }
         original = copy.deepcopy(function)
         html = _function_page(function, [], {}, "a" * 40)
-        self.assertEqual(_discovery_section("Tags", function["tags"]), "")
+        tags_html = _discovery_section("Tags", function["tags"])
+        self.assertIn("canonical-tag", tags_html)
+        self.assertNotIn("draft-tag", tags_html)
+        self.assertNotIn("machine-tag", tags_html)
         self.assertNotIn("Draft metadata", html)
         self.assertNotIn("draft-tag", html)
+        self.assertNotIn("machine-tag", html)
         self.assertNotIn("draft-use", html)
+        self.assertNotIn("machine-use", html)
+        self.assertIn("canonical-tag", html)
+        self.assertIn("reviewed-use", html)
         self.assertNotIn("Unapproved steps stay hidden.", html)
         self.assertIn("No activation steps are published for this command.", html)
         self.assertNotIn("review-pending", html)

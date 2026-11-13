@@ -10,11 +10,12 @@ or explain a complete activation procedure.
 ## Preparation Learning
 
 Begin with [Preparation Learning](../preparation-learning/) before using any
-OCF function. You may skip it only if you have already learned the official
-Human Plus preparation track. Preparation Learning is a separate introductory
-session, not one of the 58 function records. Its own published edition and
-matching transcript appear on its page when present in the verified release
-catalog.
+OCF function. The only exception is for people who have already learned the
+official Human Plus preparation track. This skip exception is Michael's explicit
+instruction, not a verified official OCF policy. Preparation Learning is a
+separate introductory session, not one of the 58 function records. Its own
+published edition and matching transcript appear on its page when present in the
+verified release catalog.
 
 ## Choose one practice
 
@@ -25,7 +26,8 @@ driving or doing anything that requires vigilance.
 
 ## A suggested way to explore
 
-These three independent functions can be approachable starting points:
+After Preparation Learning, these three functions can be approachable starting
+points:
 
 1. [Relax — OCF-FND-004](../functions/OCF-FND-004/) — a gentle introduction to
    guided relaxation and the structure of OCF listening.
@@ -34,9 +36,9 @@ These three independent functions can be approachable starting points:
 3. [Think Fast — OCF-COG-007](../functions/OCF-COG-007/) — a thinking-oriented
    practice to explore through its own documented instructions.
 
-After Preparation Learning, you can explore these functions in any order. The
-list is an optional browsing suggestion, not a required sequence among the
-functions. Reading a guide does not mean an audio recording is available.
+You can explore these functions in any order; the list is an optional browsing
+suggestion, not a required sequence among them. Reading a guide does not mean an
+audio recording is available.
 
 ## Learn the cues, then choose
 

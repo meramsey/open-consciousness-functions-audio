@@ -86,7 +86,8 @@ test('Start Here renders the approved suggestion as an ordered list and presents
   expect(headings.indexOf('Choose one practice')).toBeLessThan(headings.indexOf('A suggested way to explore'));
   const text = await page.locator('#main').innerText();
   expect(text).toContain('Begin with Preparation Learning before using any OCF function.');
-  expect(text).toContain('You may skip it only if you have already learned the official Human Plus preparation track.');
+  expect(text).toContain('The only exception is for people who have already learned the official Human Plus preparation track.');
+  expect(text).toContain("This skip exception is Michael's explicit instruction, not a verified official OCF policy.");
   const sequence = page.locator('#main ol');
   await expect(sequence).toHaveCount(1);
   const items = await sequence.locator('li').allTextContents();
@@ -96,13 +97,14 @@ test('Start Here renders the approved suggestion as an ordered list and presents
   expect(items[2]).toContain('Think Fast — OCF-COG-007');
   expect(text).not.toContain('distinguishes displayed cues from spoken cues');
   expect(text).toContain('separate introductory session, not one of the 58 function records');
-  expect(text).toContain('After Preparation Learning, you can explore these functions in any order.');
-  expect(text).toContain('not a required sequence among the functions');
+  expect(text).toContain('After Preparation Learning, these three functions can be approachable starting points:');
+  expect(text).toContain('You can explore these functions in any order;');
+  expect(text).toContain('not a required sequence among them');
   await noAxeViolations(page);
   await page.goto('/');
   const hero = await page.locator('.docs-hero').innerText();
-  expect(hero).toContain('Start with Preparation Learning before using any OCF function');
-  expect(hero).toContain('unless you have already learned the official Human Plus preparation track');
+  expect(hero).toContain('Complete Preparation Learning before using any OCF function.');
+  expect(hero).toContain("This skip exception is Michael's instruction, not a verified official OCF policy.");
   await expect(page.locator('.desktop-nav a').first()).toHaveAttribute('href', 'preparation-learning/');
   await expect(page.locator('.path-card').first()).toHaveAttribute('href', 'preparation-learning/');
   await expect(page.locator('.desktop-nav a[href="functions/"]')).toHaveCount(1);
@@ -117,15 +119,45 @@ test('historical names appear only in their source-authoritative lookup page', a
   await expect(page.locator('[data-historical-name-entry]')).toHaveCount(43);
   expect(receipt.historical_mapping_count).toBe(43);
   expect(receipt.historical_name_count).toBe(95);
+  expect(receipt.historical_name_kind_counts).toEqual({
+    'former-primary': 25,
+    'former-teaching': 34,
+    'former-title': 34,
+    'legacy-phrase': 2,
+  });
   const smell = page.locator('[data-historical-name-entry][data-function-id="OCF-SEN-003"]');
   await expect(smell).toContainText('Sensory: Smell');
+  await expect(smell.locator('[data-historical-kind="former-title"]')).toContainText('Former title');
   await expect(smell).not.toContainText('PLUS-SMELL GREATER');
   await expect(smell).not.toContainText('PLUS-SMELL LESSER');
   await expect(page.locator('[data-historical-name-entry][data-function-id="OCF-SEN-005"]')).not.toContainText('PLUS-TOUCH MORE');
   await expect(page.locator('a[href*="OCF_HISTORICAL_LOOKUP_CURRENT.md"]')).toHaveAttribute('href', /9518e90f64b114963e445027fbe3e507965e22be/);
   await expect(page.getByText('A match never selects an activation target.')).toBeVisible();
+  const unmapped = page.locator('.page-intro');
+  await expect(unmapped).toContainText('these 15 functions');
+  for (const id of ['OCF-BOD-010', 'OCF-BOD-012', 'OCF-COG-003', 'OCF-COG-006', 'OCF-COG-007', 'OCF-COM-001', 'OCF-EMO-001', 'OCF-EXP-003', 'OCF-EXP-005', 'OCF-EXP-006', 'OCF-FND-001', 'OCF-FND-006', 'OCF-PRF-001', 'OCF-PRF-005', 'OCF-PRF-006']) {
+    await expect(page.locator(`.page-intro a[href="../functions/${id}/"]`)).toHaveCount(1);
+  }
+  await expect(unmapped).toContainText('Absence from this reference does not establish that no historical counterpart exists.');
   await page.setViewportSize({ width: 375, height: 900 });
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(375);
+  await noAxeViolations(page);
+});
+
+test('Listening Guide and Preparation Learning clearly state preparation-first guidance and exception limits', async ({ page }) => {
+  await page.goto('/listening/');
+  const guidance = page.locator('.preparation-first-note');
+  await expect(guidance).toBeVisible();
+  await expect(guidance).toContainText('Complete Preparation Learning before using any OCF function.');
+  await expect(guidance).toContainText('Only people who have already learned the official Human Plus preparation track may skip it.');
+  await expect(guidance).toContainText("This skip exception is Michael's instruction, not a verified official OCF policy.");
+  await expect(page.locator('main')).not.toContainText('Function guides distinguish exact display cues from exact spoken cues.');
+  await noAxeViolations(page);
+  await page.goto('/preparation-learning/');
+  const intro = page.locator('.page-intro');
+  await expect(intro).toContainText('Complete Preparation Learning before using any OCF function.');
+  await expect(intro).toContainText('Only people who have already learned the official Human Plus preparation track may skip it.');
+  await expect(intro).toContainText("This skip exception is Michael's instruction, not a verified official OCF policy.");
   await noAxeViolations(page);
 });
 
