@@ -141,7 +141,19 @@
   }
 
   const nav = document.querySelector('.mobile-nav');
-  if (nav) nav.querySelectorAll('a').forEach(link => link.addEventListener('click', () => { nav.open = false; }));
+  if (nav) {
+    const summary = nav.querySelector('summary');
+    nav.querySelectorAll('a').forEach(link => link.addEventListener('click', () => { nav.open = false; }));
+    document.addEventListener('pointerdown', event => {
+      if (nav.open && !nav.contains(event.target)) nav.open = false;
+    });
+    document.addEventListener('keydown', event => {
+      if (event.key === 'Escape' && nav.open) {
+        nav.open = false;
+        summary.focus();
+      }
+    });
+  }
 
   const tocLinks = [...document.querySelectorAll('.desktop-toc a, .mobile-toc a')];
   const sections = tocLinks.map(link => document.getElementById(decodeURIComponent(link.hash.slice(1)))).filter(Boolean);

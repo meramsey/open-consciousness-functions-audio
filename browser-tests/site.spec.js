@@ -2,11 +2,11 @@ const { test, expect } = require('@playwright/test');
 const fs = require('node:fs/promises');
 const path = require('node:path');
 
-async function noAxeViolations(page) {
+async function noAxeViolations(page, context = undefined) {
   await page.addScriptTag({ path: require.resolve('axe-core/axe.min.js') });
-  const result = await page.evaluate(async () => axe.run(document, {
+  const result = await page.evaluate(async contextSelector => axe.run(contextSelector || document, {
     runOnly: { type: 'tag', values: ['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa'] },
-  }));
+  }), context);
   const details = result.violations.map(({ id, impact, nodes }) => `${id} (${impact}): ${nodes.map(node => node.target.join(' ')).join(', ')}`).join('\n');
   expect(result.violations, details).toEqual([]);
 }
@@ -109,8 +109,12 @@ test('Start Here renders the approved suggestion as an ordered list and presents
   expect(hero).toContain('Only people who have already learned the official Human Plus preparation track may skip it.');
   expect(homeText).not.toContain('Michael');
   expect(homeText).not.toContain('not a verified official OCF policy');
-  await expect(page.locator('.desktop-nav a').first()).toHaveAttribute('href', 'preparation-learning/');
-  await expect(page.locator('.path-card').first()).toHaveAttribute('href', 'preparation-learning/');
+  await expect(page.locator('.desktop-nav a').first()).toHaveAttribute('href', 'start/');
+  await expect(page.locator('.path-card').first()).toHaveAttribute('href', 'start/');
+  await expect(page.locator('.desktop-nav a[href="preparation-learning/"]')).toHaveCount(0);
+  await expect(page.locator('.path-card[href="preparation-learning/"]')).toHaveCount(0);
+  await expect(page.locator('.docs-hero .button-light')).toHaveAttribute('href', 'start/');
+  await expect(page.locator('.docs-hero a[href="preparation-learning/"]')).toHaveCount(0);
   await expect(page.locator('.desktop-nav a[href="functions/"]')).toHaveCount(1);
   const quickPath = page.locator('.path-card[href="quick-reference/"]');
   await expect(quickPath).toContainText('current spoken cues');
@@ -146,6 +150,98 @@ test('historical names appear only in their source-authoritative lookup page', a
   await page.setViewportSize({ width: 375, height: 900 });
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(375);
   await noAxeViolations(page);
+});
+
+test('Start Here leads the home paths while Preparation Learning stays available inside onboarding', async ({ page }) => {
+  await page.goto('/');
+  await expect(page.locator('.docs-hero .button-light')).toHaveAttribute('href', 'start/');
+  await expect(page.locator('.path-card').first()).toHaveAttribute('href', 'start/');
+  await expect(page.locator('.path-card[href="preparation-learning/"]')).toHaveCount(0);
+  await expect(page.locator('.desktop-nav a[href="preparation-learning/"]')).toHaveCount(0);
+  await page.goto('/start/');
+  await expect(page.locator('#main')).toContainText('Complete Preparation Learning before using any OCF function.');
+  await expect(page.locator('#main')).toContainText('Only people who have already learned the official Human Plus preparation track may skip it.');
+  await expect(page.locator('#main a[href="../preparation-learning/"]')).toBeVisible();
+  await page.goto('/preparation-learning/');
+  await expect(page.locator('.edition-card audio')).toBeVisible();
+});
+
+test('mobile navigation stays readable, in-flow, keyboard-operable, and overflow-free through zoom widths', async ({ page }) => {
+  await page.goto('/');
+  for (const width of [160, 320, 360, 375, 390, 414, 760, 768, 1024, 1440]) {
+    await page.setViewportSize({ width, height: 900 });
+    expect(await page.evaluate(() => document.documentElement.scrollWidth), `horizontal overflow at ${width}px`).toBeLessThanOrEqual(width);
+    if (width <= 760) {
+      await expect(page.locator('.mobile-nav summary')).toBeVisible();
+      await expect(page.locator('.desktop-nav')).toBeHidden();
+    } else {
+      await expect(page.locator('.mobile-nav')).toBeHidden();
+      await expect(page.locator('.desktop-nav')).toBeVisible();
+    }
+  }
+
+  await page.setViewportSize({ width: 375, height: 812 });
+  await page.evaluate(() => localStorage.setItem('ocf-theme', 'light'));
+  await page.reload();
+  const menu = page.locator('.mobile-nav');
+  const summary = menu.locator('summary');
+  await summary.focus();
+  await page.keyboard.press('Enter');
+  await expect(menu).toHaveAttribute('open', '');
+  expect(await menu.locator('nav').evaluate(element => getComputedStyle(element).position)).toBe('static');
+  expect(await menu.locator('nav').evaluate(element => element.getBoundingClientRect().bottom)).toBeLessThanOrEqual(
+    await page.locator('main').evaluate(element => element.getBoundingClientRect().top),
+  );
+  await page.keyboard.press('Tab');
+  await expect(menu.locator('a').first()).toBeFocused();
+  await expect(menu.locator('a').first()).toHaveAttribute('href', 'start/');
+  await expect(menu.locator('a[href="preparation-learning/"]')).toHaveCount(0);
+  expect(await menu.locator('a').count()).toBe(9);
+  const linkRects = await menu.locator('a').evaluateAll(links => links.map(link => {
+    const { x, right, height } = link.getBoundingClientRect();
+    return { x, right, height };
+  }));
+  for (const rect of linkRects) {
+    expect(rect.height).toBeGreaterThanOrEqual(44);
+    expect(rect.x).toBeGreaterThanOrEqual(0);
+    expect(rect.right).toBeLessThanOrEqual(375);
+  }
+  expect((await menu.locator('summary').boundingBox()).height).toBeGreaterThanOrEqual(44);
+  for (const link of await menu.locator('a').all()) await expect(link).toBeVisible();
+  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(375);
+  await fs.mkdir('browser-artifacts', { recursive: true });
+  await page.screenshot({ path: path.join('browser-artifacts', 'mobile-menu-light-375.png'), fullPage: false });
+  await page.keyboard.press('Escape');
+  await expect(menu).not.toHaveAttribute('open', '');
+  await expect(summary).toBeFocused();
+
+  await summary.click();
+  await expect(menu).toHaveAttribute('open', '');
+  await page.locator('.site-footer p').click();
+  await expect(menu).not.toHaveAttribute('open', '');
+
+  await page.locator('.theme-toggle').click();
+  await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
+  await summary.click();
+  await page.screenshot({ path: path.join('browser-artifacts', 'mobile-menu-dark-375.png'), fullPage: false });
+  await noAxeViolations(page, '.site-header');
+  await page.keyboard.press('Escape');
+});
+
+test('Android-like touch users can open and follow the primary mobile navigation', async ({ browser, browserName }) => {
+  test.skip(browserName !== 'chromium', 'Playwright mobile emulation is Chromium-only');
+  const context = await browser.newContext({ viewport: { width: 320, height: 640 }, isMobile: true, hasTouch: true, deviceScaleFactor: 2 });
+  try {
+    const mobilePage = await context.newPage();
+    await mobilePage.goto('http://127.0.0.1:4173/');
+    await mobilePage.locator('.mobile-nav summary').tap();
+    await expect(mobilePage.locator('.mobile-nav')).toHaveAttribute('open', '');
+    await mobilePage.locator('.mobile-nav a[href="start/"]').tap();
+    await expect(mobilePage).toHaveURL(/\/start\/$/);
+    await expect(mobilePage.locator('#main')).toContainText('Complete Preparation Learning before using any OCF function.');
+  } finally {
+    await context.close();
+  }
 });
 
 test('Listening Guide and Preparation Learning clearly state preparation-first guidance and exception limits', async ({ page }) => {
