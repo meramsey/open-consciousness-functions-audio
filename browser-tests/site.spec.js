@@ -201,11 +201,18 @@ test('Start Here leads the home paths while Preparation Learning stays available
 
 test('mobile navigation stays readable, in-flow, keyboard-operable, and overflow-free through zoom widths', async ({ page }) => {
   await page.goto('/');
-  for (const width of [160, 320, 360, 375, 390, 414, 760, 768, 1024, 1440]) {
+  for (const width of [160, 320, 360, 375, 390, 414, 760, 768, 820, 1024, 1280, 1440]) {
     await page.setViewportSize({ width, height: 900 });
     expect(await page.evaluate(() => document.documentElement.scrollWidth), `horizontal overflow at ${width}px`).toBeLessThanOrEqual(width);
-    if (width <= 760) {
-      await expect(page.locator('.mobile-nav summary')).toBeVisible();
+    const header = await page.locator('.site-header').evaluate(element => {
+      const rect = element.getBoundingClientRect();
+      return { left: rect.left, right: rect.right, width: rect.width, scrollWidth: element.scrollWidth, clientWidth: element.clientWidth };
+    });
+    expect(header.left).toBeGreaterThanOrEqual(0);
+    expect(header.right).toBeLessThanOrEqual(width + 1);
+    expect(header.scrollWidth).toBeLessThanOrEqual(header.clientWidth + 1);
+    if (width <= 1080) {
+      await expect(page.locator('.mobile-nav > summary')).toBeVisible();
       await expect(page.locator('.desktop-nav')).toBeHidden();
     } else {
       await expect(page.locator('.mobile-nav')).toBeHidden();
@@ -213,11 +220,27 @@ test('mobile navigation stays readable, in-flow, keyboard-operable, and overflow
     }
   }
 
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await page.evaluate(() => { document.documentElement.style.fontSize = '200%'; });
+  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(1280);
+  expect(await page.locator('.site-header').evaluate(element => element.scrollWidth <= element.clientWidth + 1)).toBe(true);
+  await page.evaluate(() => { document.documentElement.style.removeProperty('font-size'); });
+  await page.goto('/start/');
+  await expect(page.locator('.desktop-nav a[aria-current="page"]')).toHaveText('Start Here');
+  await page.goto('/functions/');
+  await expect(page.locator('.desktop-nav a[aria-current="page"]')).toHaveText('Browse & Listen');
+  await page.goto('/functions/OCF-BOD-001/');
+  await expect(page.locator('.desktop-nav a[aria-current="location"]')).toHaveText('Browse & Listen');
+  await expect(page.locator('.breadcrumbs [aria-current="page"]')).toHaveText('Brain Flow');
+  await page.goto('/downloads/');
+  await expect(page.locator('.desktop-nav .more-links a[aria-current="page"]')).toHaveText('Downloads');
+
+  await page.goto('/');
   await page.setViewportSize({ width: 375, height: 812 });
   await page.evaluate(() => localStorage.setItem('ocf-theme', 'light'));
   await page.reload();
   const menu = page.locator('.mobile-nav');
-  const summary = menu.locator('summary');
+  const summary = menu.locator(':scope > summary');
   await summary.focus();
   await page.keyboard.press('Enter');
   await expect(menu).toHaveAttribute('open', '');
@@ -230,7 +253,9 @@ test('mobile navigation stays readable, in-flow, keyboard-operable, and overflow
   await expect(menu.locator('a').first()).toHaveAttribute('href', 'start/');
   await expect(menu.locator('a[href="preparation-learning/"]')).toHaveCount(0);
   expect(await menu.locator('a').count()).toBe(9);
-  const linkRects = await menu.locator('a').evaluateAll(links => links.map(link => {
+  const primaryLinks = menu.locator('nav[aria-label="Main navigation"] > a');
+  await expect(primaryLinks).toHaveCount(4);
+  const linkRects = await primaryLinks.evaluateAll(links => links.map(link => {
     const { x, right, height } = link.getBoundingClientRect();
     return { x, right, height };
   }));
@@ -239,8 +264,13 @@ test('mobile navigation stays readable, in-flow, keyboard-operable, and overflow
     expect(rect.x).toBeGreaterThanOrEqual(0);
     expect(rect.right).toBeLessThanOrEqual(375);
   }
-  expect((await menu.locator('summary').boundingBox()).height).toBeGreaterThanOrEqual(44);
-  for (const link of await menu.locator('a').all()) await expect(link).toBeVisible();
+  expect((await summary.boundingBox()).height).toBeGreaterThanOrEqual(44);
+  for (const link of await primaryLinks.all()) await expect(link).toBeVisible();
+  const more = menu.locator('.more-menu');
+  await more.locator('summary').click();
+  await expect(more.locator('.more-links a')).toHaveCount(5);
+  for (const link of await more.locator('.more-links a').all()) await expect(link).toBeVisible();
+  await more.locator('summary').click();
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(375);
   await fs.mkdir('browser-artifacts', { recursive: true });
   await page.screenshot({ path: path.join('browser-artifacts', 'mobile-menu-light-375.png'), fullPage: false });
@@ -261,13 +291,330 @@ test('mobile navigation stays readable, in-flow, keyboard-operable, and overflow
   await page.keyboard.press('Escape');
 });
 
+test('Downloads cards keep every individual format action visible and named across viewport widths', async ({ page }) => {
+  await page.goto('/downloads/');
+  const receipt = await page.request.get('/site-build-receipt.json').then(response => response.json());
+  await expect(page.locator('.download-card')).toHaveCount(receipt.published_session_count);
+  await expect(page.locator('.reference-table')).toHaveCount(0);
+
+  const catalog = await page.request.get('/catalog.json').then(response => response.json());
+  const release = catalog.releases[0];
+  for (const [functionId, title] of [['OCF-FND-004', 'Relax'], ['OCF-BOD-001', 'Brain Flow']]) {
+    const session = release.functions.find(row => row.function_id === functionId).sessions[0];
+    const card = page.locator(`.download-card[data-function-id="${functionId}"]`);
+    await expect(card.locator('h2')).toContainText(title);
+    for (const format of ['mp3', 'flac']) {
+      const asset = session.assets.find(item => item.format === format);
+      const link = card.getByRole('link', { name: new RegExp(`^Download ${format.toUpperCase()} for ${title},`) });
+      await expect(link).toHaveAttribute('href', asset.download_url);
+      await expect(link).toContainText(`Download ${format.toUpperCase()}`);
+      await expect(card).toContainText(asset.sha256);
+    }
+  }
+
+  for (const width of [320, 375, 390, 768, 1440]) {
+    await page.setViewportSize({ width, height: 900 });
+    const layout = await page.evaluate(() => ({
+      viewport: document.documentElement.clientWidth,
+      pageWidth: document.documentElement.scrollWidth,
+      cards: [...document.querySelectorAll('.download-card')].map(card => {
+        const cardRect = card.getBoundingClientRect();
+        const actions = [...card.querySelectorAll('.download-action')].map(link => {
+          const rect = link.getBoundingClientRect();
+          return { left: rect.left, right: rect.right, width: rect.width };
+        });
+        return { width: cardRect.width, scrollWidth: card.scrollWidth, clientWidth: card.clientWidth, actions };
+      }),
+    }));
+    expect(layout.pageWidth, `document overflow at ${width}px`).toBeLessThanOrEqual(width);
+    expect(layout.cards).toHaveLength(receipt.published_session_count);
+    for (const card of layout.cards) {
+      expect(card.width).toBeGreaterThan(0);
+      expect(card.scrollWidth, `card overflow at ${width}px`).toBeLessThanOrEqual(card.clientWidth + 1);
+      expect(card.actions.length).toBeGreaterThanOrEqual(1);
+      for (const action of card.actions) {
+        expect(action.width).toBeGreaterThan(0);
+        expect(action.left).toBeGreaterThanOrEqual(-1);
+        expect(action.right).toBeLessThanOrEqual(layout.viewport + 1);
+      }
+    }
+    if (width === 390 || width === 1440) {
+      await fs.mkdir('browser-artifacts', { recursive: true });
+      await page.screenshot({ path: path.join('browser-artifacts', `checkpoint1-downloads-${width}.png`), fullPage: true });
+    }
+  }
+  await noAxeViolations(page);
+});
+
+test('manual and system theme combinations keep banner, hover and focus contrast; forced colors and reduced motion remain usable', async ({ page }) => {
+  const contrast = (foreground, background) => {
+    const channel = value => {
+      const n = value / 255;
+      return n <= 0.04045 ? n / 12.92 : ((n + 0.055) / 1.055) ** 2.4;
+    };
+    const rgb = value => value.match(/[\d.]+/g).slice(0, 3).map(Number);
+    const luminance = color => {
+      const [r, g, b] = rgb(color).map(channel);
+      return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+    };
+    const values = [luminance(foreground), luminance(background)].sort((a, b) => b - a);
+    return (values[0] + 0.05) / (values[1] + 0.05);
+  };
+  for (const osTheme of ['light', 'dark']) {
+    for (const preference of ['light', 'dark', 'system']) {
+      await page.emulateMedia({ colorScheme: osTheme });
+      await page.goto('/');
+      await page.evaluate(value => localStorage.setItem('ocf-theme', value), preference);
+      await page.reload();
+      const expected = preference === 'system' ? 'System' : preference[0].toUpperCase() + preference.slice(1);
+      const themeButton = page.getByRole('button', { name: `Color theme: ${expected}. Activate to change.` });
+      await expect(themeButton).toBeVisible();
+      const resolved = await page.evaluate(() => document.documentElement.getAttribute('data-theme'));
+      expect(resolved).toBe(preference === 'system' ? null : preference);
+      const banner = page.locator('.release-banner');
+      await expect(banner).toBeVisible();
+      const colors = await page.evaluate(() => {
+        const banner = document.querySelector('.release-banner');
+        const background = getComputedStyle(banner).backgroundColor;
+        return ['h2', '.eyebrow', 'p:not(.eyebrow)', '.text-link'].map(selector => ({
+          selector, foreground: getComputedStyle(banner.querySelector(selector)).color, background,
+        }));
+      });
+      for (const item of colors) expect(contrast(item.foreground, item.background), `${preference}/${osTheme} ${item.selector}`).toBeGreaterThanOrEqual(4.5);
+      const releaseLink = banner.locator('.text-link');
+      await releaseLink.hover();
+      const hoverColors = await releaseLink.evaluate(link => ({
+        foreground: getComputedStyle(link).color,
+        background: getComputedStyle(link.closest('.release-banner')).backgroundColor,
+      }));
+      expect(contrast(hoverColors.foreground, hoverColors.background), `${preference}/${osTheme} hovered link`).toBeGreaterThanOrEqual(4.5);
+      await themeButton.focus();
+      const focusColors = await themeButton.evaluate(button => ({ ring: getComputedStyle(button).outlineColor, background: getComputedStyle(button).backgroundColor }));
+      expect(contrast(focusColors.ring, focusColors.background), `${preference}/${osTheme} focus ring`).toBeGreaterThanOrEqual(3);
+      await page.goto('/functions/OCF-BOD-001/');
+      const documentationLink = page.locator('.docs-content .source-link a').first();
+      await documentationLink.hover();
+      const documentationHover = await page.evaluate(link => ({
+        foreground: getComputedStyle(link).color,
+        background: getComputedStyle(document.body).backgroundColor,
+      }), await documentationLink.elementHandle());
+      expect(contrast(documentationHover.foreground, documentationHover.background), `${preference}/${osTheme} documentation-link hover`).toBeGreaterThanOrEqual(4.5);
+
+      await page.goto('/downloads/');
+      const cardSurfaces = await page.evaluate(() => {
+        const root = getComputedStyle(document.documentElement);
+        const expectedValue = root.getPropertyValue('--card').trim();
+        const probe = document.createElement('div');
+        probe.style.backgroundColor = expectedValue;
+        document.body.append(probe);
+        const expected = getComputedStyle(probe).backgroundColor;
+        probe.remove();
+        const card = document.querySelector('.download-card');
+        return {
+          expected,
+          card: getComputedStyle(card).backgroundColor,
+          foreground: getComputedStyle(card.querySelector('h2')).color,
+        };
+      });
+      expect(cardSurfaces.card, `${preference}/${osTheme} Downloads card surface`).toBe(cardSurfaces.expected);
+      expect(contrast(cardSurfaces.foreground, cardSurfaces.card), `${preference}/${osTheme} Downloads card title`).toBeGreaterThanOrEqual(4.5);
+      const moreMenu = page.locator('.desktop-nav .more-menu');
+      await moreMenu.locator(':scope > summary').click();
+      const menuSurfaces = await moreMenu.locator('.more-links').evaluate(menu => ({
+        background: getComputedStyle(menu).backgroundColor,
+        foreground: getComputedStyle(menu.querySelector('a')).color,
+      }));
+      expect(menuSurfaces.background, `${preference}/${osTheme} More menu must be opaque`).toBe(cardSurfaces.expected);
+      expect(contrast(menuSurfaces.foreground, menuSurfaces.background), `${preference}/${osTheme} More menu text`).toBeGreaterThanOrEqual(4.5);
+    }
+  }
+  await page.emulateMedia({ forcedColors: 'active', reducedMotion: 'reduce' });
+  await page.keyboard.press('Tab');
+  await page.getByRole('button', { name: /Color theme/ }).focus();
+  const modes = await page.evaluate(() => ({
+    forcedColors: matchMedia('(forced-colors: active)').matches,
+    reducedMotion: matchMedia('(prefers-reduced-motion: reduce)').matches,
+    outlineStyle: getComputedStyle(document.activeElement).outlineStyle,
+    outlineWidth: getComputedStyle(document.activeElement).outlineWidth,
+    scrollBehavior: getComputedStyle(document.documentElement).scrollBehavior,
+    transitionDuration: getComputedStyle(document.activeElement).transitionDuration,
+  }));
+  expect(modes.forcedColors).toBe(true);
+  expect(modes.reducedMotion).toBe(true);
+  expect(modes.outlineStyle).not.toBe('none');
+  expect(parseFloat(modes.outlineWidth)).toBeGreaterThan(0);
+  expect(modes.scrollBehavior).toBe('auto');
+  await noAxeViolations(page, '.site-header');
+});
+
+test('current-cue search normalizes separators, offers clear/no-results, and keeps historical labels out', async ({ page }) => {
+  await page.goto('/functions/');
+  const search = page.locator('[data-function-search]');
+  for (const query of ['PLUS-RELAX', '  Plus   Relax  ', 'plus—relax']) {
+    await search.fill(query);
+    await expect(page.locator('[data-function-card]:visible')).toHaveCount(1);
+    await expect(page.locator('[data-function-card]:visible h2')).toContainText('Relax');
+  }
+  await search.fill('no-such-current-cue');
+  await expect(page.locator('[data-function-no-results]')).toBeVisible();
+  await expect(page.locator('[data-function-clear]')).toBeVisible();
+  await page.locator('[data-function-clear]').click();
+  await expect(search).toHaveValue('');
+  await expect(page.locator('[data-function-card]:visible')).toHaveCount(58);
+
+  await search.fill('PLUS-STRONG');
+  await expect(page.locator('[data-function-card][data-search*="inner power"]')).toBeHidden();
+  await expect(page.locator('[data-function-card]:visible h2')).toContainText('Strong-Quick');
+
+  await page.goto('/quick-reference/');
+  const referenceSearch = page.locator('[data-reference-search]');
+  await referenceSearch.fill('  PLUS---RELAX  ');
+  await expect(page.locator('[data-reference-row]:visible')).toHaveCount(1);
+  await expect(page.locator('[data-reference-row]:visible')).toContainText('Plus Relax');
+  await referenceSearch.fill('no-such-current-cue');
+  await expect(page.locator('[data-reference-no-results]')).toBeVisible();
+  await expect(page.locator('[data-reference-clear]')).toBeVisible();
+  await page.locator('[data-reference-clear]').click();
+  await expect(referenceSearch).toHaveValue('');
+  await expect(page.locator('[data-reference-row]:visible')).toHaveCount(58);
+  await noAxeViolations(page, '.reference-tools');
+});
+
+test('filtered-out synthetic media remains focused, understandable, seekable and resumable after pause and end', async ({ page }) => {
+  const audioRequests = [];
+  page.on('request', request => { if (/\.(?:mp3|flac)(?:$|[?#])/i.test(request.url())) audioRequests.push(request.url()); });
+  const sampleRate = 8000;
+  const sampleCount = sampleRate * 3;
+  const wav = Buffer.alloc(44 + sampleCount, 128);
+  wav.write('RIFF', 0); wav.writeUInt32LE(36 + sampleCount, 4); wav.write('WAVE', 8);
+  wav.write('fmt ', 12); wav.writeUInt32LE(16, 16); wav.writeUInt16LE(1, 20);
+  wav.writeUInt16LE(1, 22); wav.writeUInt32LE(sampleRate, 24);
+  wav.writeUInt32LE(sampleRate, 28); wav.writeUInt16LE(1, 32); wav.writeUInt16LE(8, 34);
+  wav.write('data', 36); wav.writeUInt32LE(sampleCount, 40);
+  const fixtureURL = `data:audio/wav;base64,${wav.toString('base64')}`;
+  await page.addInitScript(fixture => {
+    Object.defineProperty(HTMLAudioElement.prototype, 'src', {
+      configurable: true,
+      get() { return this.getAttribute('src') || ''; },
+      set() { this.setAttribute('src', fixture); },
+    });
+  }, fixtureURL);
+  await page.goto('/');
+  const relax = page.locator('.session-card').filter({ has: page.getByRole('link', { name: 'Relax', exact: true }) });
+  const player = relax.locator('audio');
+  await expect(player).toBeAttached();
+  await player.evaluate(audio => audio.load());
+  await expect.poll(() => player.evaluate(audio => audio.duration)).toBeGreaterThan(2.9);
+  await player.evaluate(audio => { audio.dataset.fixtureIdentity = 'relax-synthetic-wav'; });
+  const fixtureControl = await relax.evaluate(card => {
+    const player = card.querySelector('audio');
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.dataset.fixturePlaybackControl = '';
+    button.textContent = 'Play synthetic test media';
+    button.addEventListener('click', async () => {
+      if (player.paused || player.ended) await player.play();
+      else player.pause();
+    });
+    card.append(button);
+    return button.dataset.fixturePlaybackControl;
+  });
+  expect(fixtureControl).toBe('');
+  const fixtureButton = relax.locator('[data-fixture-playback-control]');
+  await fixtureButton.focus();
+  await page.keyboard.press('Enter');
+  await expect.poll(() => player.evaluate(audio => audio.paused)).toBe(false);
+  await player.evaluate(audio => { audio.currentTime = 0.6; });
+  await player.evaluate(audio => audio.dispatchEvent(new Event('timeupdate')));
+  const positionBeforeFilter = await player.evaluate(audio => audio.currentTime);
+  await player.focus();
+  const focusedBeforeFilter = await player.evaluate(audio => document.activeElement === audio);
+  expect(focusedBeforeFilter).toBe(true);
+  await page.locator('#search').evaluate(input => {
+    input.value = 'OCF-BOD-001';
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+  });
+  await expect(page.locator('#results-count')).toContainText('1 matching session edition');
+  await expect(relax).toBeVisible();
+  await expect(relax.locator('[data-filter-pinned]')).toContainText('Currently playing');
+  expect(await player.evaluate(audio => audio.isSameNode(document.querySelector('.session-card[data-function-id="OCF-FND-004"] audio')))).toBe(true);
+  expect(await player.evaluate(audio => document.activeElement === audio)).toBe(true);
+  await fixtureButton.focus();
+  await page.keyboard.press('Enter');
+  await expect.poll(() => player.evaluate(audio => audio.paused)).toBe(true);
+  await expect(relax.locator('[data-filter-pinned]')).toContainText('Paused at 0:');
+  const pausedPosition = await player.evaluate(audio => audio.currentTime);
+  expect(pausedPosition).toBeGreaterThanOrEqual(positionBeforeFilter);
+  expect(pausedPosition).toBeLessThan(2.9);
+  expect(await player.evaluate(audio => audio.isConnected)).toBe(true);
+  expect(await fixtureButton.evaluate(button => document.activeElement === button)).toBe(true);
+  await page.locator('#search').evaluate(input => {
+    input.value = 'OCF-FND-004';
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+  });
+  await expect(relax).toBeVisible();
+  await expect(relax.locator('[data-filter-pinned]')).toBeHidden();
+  await page.locator('#search').focus();
+  await page.locator('#search').evaluate(input => {
+    input.value = 'OCF-BOD-001';
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+  });
+  await expect(relax).toBeVisible();
+  await expect(relax.locator('[data-filter-pinned]')).toContainText('Paused at 0:');
+  await fixtureButton.focus();
+  await page.keyboard.press('Enter');
+  await expect.poll(() => player.evaluate(audio => audio.paused)).toBe(false);
+  expect(await player.evaluate(audio => audio.currentTime)).toBeGreaterThanOrEqual(pausedPosition);
+  await expect(relax.locator('[data-filter-pinned]')).toContainText('Currently playing');
+  await expect.poll(() => player.evaluate(audio => audio.ended), { timeout: 5000 }).toBe(true);
+  await expect(relax).toBeVisible();
+  await expect(relax.locator('[data-filter-pinned]')).toContainText('Playback ended');
+  expect(await player.evaluate(audio => audio.isConnected)).toBe(true);
+  expect(await fixtureButton.evaluate(button => document.activeElement === button)).toBe(true);
+  await page.keyboard.press('Enter');
+  await expect.poll(() => player.evaluate(audio => !audio.paused && !audio.ended)).toBe(true);
+  await expect(relax).toBeVisible();
+  expect(await player.evaluate(audio => audio.isConnected)).toBe(true);
+  expect(await player.evaluate(audio => audio.currentTime)).toBeLessThan(0.5);
+  expect(await player.evaluate(audio => audio !== document.querySelector('.session-card[data-function-id="OCF-BOD-001"] audio'))).toBe(true);
+  expect(await player.evaluate(audio => audio === document.querySelector('.session-card[data-function-id="OCF-FND-004"] audio'))).toBe(true);
+  expect(await player.getAttribute('data-fixture-identity')).toBe('relax-synthetic-wav');
+  await page.locator('#clear-library-filters').click();
+  await expect(relax.locator('[data-filter-pinned]')).toBeHidden();
+  expect(await player.evaluate(audio => audio.isConnected && !audio.paused)).toBe(true);
+  expect(audioRequests).toEqual([]);
+
+  await page.goto('/functions/');
+  const directorySearch = page.locator('[data-function-search]');
+  await directorySearch.fill('PLUS-RELAX');
+  await page.evaluate(() => window.scrollTo(0, 300));
+  await page.getByRole('link', { name: 'Relax', exact: true }).click();
+  await expect(page).toHaveURL(/\/functions\/OCF-FND-004\/$/);
+  await page.goBack();
+  await expect(directorySearch).toHaveValue('PLUS-RELAX');
+  await expect(page.locator('[data-function-card]:visible h2')).toContainText('Relax');
+});
+
+test('catalog selection and download controls identify session and format', async ({ page }) => {
+  await page.goto('/');
+  for (const title of ['Relax', 'Brain Flow']) {
+    const card = page.locator('.session-card').filter({ has: page.getByRole('link', { name: title, exact: true }) });
+    await expect(card).toBeVisible();
+    for (const format of ['MP3', 'FLAC']) {
+      const checkboxName = new RegExp(`^Select ${format} for ${title}, en-US, Mike — Original Voice, edition 0\\.1\\.0$`);
+      await expect(card.getByRole('checkbox', { name: checkboxName })).toBeAttached();
+      await expect(card.getByRole('link', { name: new RegExp(`^Download ${format} for ${title},`) })).toBeAttached();
+    }
+  }
+});
+
 test('Android-like touch users can open and follow the primary mobile navigation', async ({ browser, browserName }) => {
   test.skip(browserName !== 'chromium', 'Playwright mobile emulation is Chromium-only');
   const context = await browser.newContext({ viewport: { width: 320, height: 640 }, isMobile: true, hasTouch: true, deviceScaleFactor: 2 });
   try {
     const mobilePage = await context.newPage();
     await mobilePage.goto('http://127.0.0.1:4173/');
-    await mobilePage.locator('.mobile-nav summary').tap();
+    await mobilePage.locator('.mobile-nav > summary').tap();
     await expect(mobilePage.locator('.mobile-nav')).toHaveAttribute('open', '');
     await mobilePage.locator('.mobile-nav a[href="start/"]').tap();
     await expect(mobilePage).toHaveURL(/\/start\/$/);
@@ -482,10 +829,10 @@ test('Quick Reference filters, keyboard controls, narrow widths, print, themes, 
   await expect(page).toHaveURL(/#behavior$/);
 
   await page.goto('/');
-  const initialTheme = await page.locator('html').getAttribute('data-theme');
+  const initialTheme = await page.locator('[data-theme-toggle]').getAttribute('data-theme-preference');
   await page.locator('[data-theme-toggle]').focus();
   await page.keyboard.press('Enter');
-  await expect(page.locator('html')).not.toHaveAttribute('data-theme', initialTheme);
+  await expect(page.locator('[data-theme-toggle]')).not.toHaveAttribute('data-theme-preference', initialTheme);
 
   await page.goto('/functions/OCF-FND-004/');
   const transcript = page.locator('[data-transcript]').first();
@@ -520,7 +867,7 @@ test('mobile navigation, spoken cue text without redundant cue copy controls, fo
   await page.goto('/functions/OCF-SLP-002/');
   await expect(page.locator('.spoken-cue strong').first()).toHaveText('Plus Sleep');
   await expect(page.locator('button.copy-cue, button[aria-label^="Copy cue:"]')).toHaveCount(0);
-  await page.locator('.mobile-nav summary').focus();
+  await page.locator('.mobile-nav > summary').focus();
   await page.keyboard.press('Space');
   await expect(page.locator('.mobile-nav')).toHaveAttribute('open', '');
   await page.locator('.mobile-nav a[href$="quick-reference/"]').focus();

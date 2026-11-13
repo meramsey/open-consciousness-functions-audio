@@ -17,12 +17,23 @@
         edition: session.edition || release.version, date: release.date,
         releaseURL: safeURL(release.release_url), assets: (session.assets || []).filter(a => safeURL(a.download_url))
       }))));
-  const filterEntries = (items, query, locale, voice) => items.filter(item =>
-    `${item.id} ${item.title} ${item.description} ${item.searchText}`.toLocaleLowerCase().includes(query.toLocaleLowerCase()) &&
-    (!locale || item.locale === locale) && (!voice || item.voiceId === voice));
+  const normalizeSearch = value => String(value || '')
+    .normalize('NFKC')
+    .toLocaleLowerCase('en-US')
+    .replace(/[\p{P}\p{S}]+/gu, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+  const filterEntries = (items, query, locale, voice) => {
+    const terms = normalizeSearch(query);
+    return items.filter(item =>
+      (!terms || normalizeSearch(`${item.id} ${item.title} ${item.description} ${item.searchText}`).includes(terms)) &&
+      (!locale || item.locale === locale) && (!voice || item.voiceId === voice));
+  };
+  const downloadActionName = (action, format, item) =>
+    `${action} ${String(format || 'file').toUpperCase()} for ${item.title}, ${item.locale}, ${item.voice}, edition ${item.edition}`;
   const downloadList = assets => assets.map(a => `${a.sha256}  ${a.filename}\n${a.download_url}`).join('\n\n') + '\n';
   const supportedCatalog = catalog => [1, 2, 3].includes(catalog.schema_version) && Array.isArray(catalog.releases);
-  if (typeof module !== 'undefined') module.exports = {safeURL, entries, filterEntries, downloadList, supportedCatalog};
+  if (typeof module !== 'undefined') module.exports = {safeURL, entries, normalizeSearch, filterEntries, downloadActionName, downloadList, supportedCatalog};
   if (typeof document === 'undefined') return;
   const el = (tag, text, className) => {
     const node = document.createElement(tag);
@@ -36,8 +47,27 @@
   const search = document.getElementById('search');
   const locale = document.getElementById('language-filter');
   const voice = document.getElementById('voice-filter');
+  const resultsCount = document.getElementById('results-count');
+  const noResults = document.getElementById('catalog-no-results');
+  const clearFilters = document.getElementById('clear-library-filters');
+  const filterStateKey = `ocf-library-filters:${location.pathname}`;
+  const filterControls = [['search', search], ['locale', locale], ['voice', voice]].filter(([, control]) => control);
   const selection = new Map();
   const selectionCount = document.getElementById('selection-count');
+  let catalogItems = [];
+  let catalogCards = [];
+  const pinnedItems = new Set();
+  function saveFilterState() {
+    try {
+      sessionStorage.setItem(filterStateKey, JSON.stringify(Object.fromEntries(filterControls.map(([key, control]) => [key, control.value]))));
+    } catch (_) { /* Filtering remains usable when storage is unavailable. */ }
+  }
+  function restoreFilterState() {
+    try {
+      const saved = JSON.parse(sessionStorage.getItem(filterStateKey) || '{}');
+      for (const [key, control] of filterControls) if (typeof saved[key] === 'string') control.value = saved[key];
+    } catch (_) { /* Ignore unavailable or invalid session state. */ }
+  }
   function save(name, content, type) {
     const url = URL.createObjectURL(new Blob([content], {type}));
     const link = el('a'); link.href = url; link.download = name; link.click();
@@ -54,34 +84,79 @@
     document.getElementById('download-selection').disabled = selection.size === 0;
     document.getElementById('playlist-selection').disabled = ![...selection.values()].some(a => a.format === 'mp3');
   }
-  function render(items) {
-    results.replaceChildren();
-    const visible = filterEntries(items, search.value, locale.value, voice.value);
-    document.getElementById('results-count').textContent = `${visible.length} session editions`;
-    if (!visible.length && items.length) results.append(el('p', 'No sessions match these filters.'));
-    visible.forEach(item => {
-      const card = el('article', undefined, 'session-card');
-      const title = el('h3'); const page = el('a', item.title);
-      page.href = item.href; title.append(page); card.append(title);
-      card.append(el('p', `${item.id} · ${item.locale} · ${item.voice} · v${item.edition}`, 'session-meta'));
-      if (item.description) card.append(el('p', item.description));
-      const mp3 = item.assets.find(a => a.format === 'mp3');
-      if (mp3) { const player = el('audio'); player.controls = true; player.preload = 'none'; player.src = mp3.download_url; player.setAttribute('aria-label', `Listen to ${item.title}`); card.append(player); }
-      item.assets.forEach(asset => {
-        const row = el('div', undefined, 'asset-row');
-        const label = el('label'); const checkbox = el('input'); checkbox.type = 'checkbox'; checkbox.checked = selection.has(asset.asset_id);
-        checkbox.addEventListener('change', () => { if (checkbox.checked) selection.set(asset.asset_id, asset); else selection.delete(asset.asset_id); updateSelection(); });
-        label.append(checkbox, document.createTextNode(` Select ${asset.format.toUpperCase()}`));
-        const link = el('a', `Download ${asset.format.toUpperCase()}`); link.href = asset.download_url;
-        row.append(label, link); card.append(row);
-        const detail = el('details'); detail.append(el('summary', `${asset.filename} — checksum and details`));
-        detail.append(el('code', asset.sha256));
-        const measurements = [asset.size_bytes ? `${(asset.size_bytes / 1048576).toFixed(1)} MiB` : '', asset.duration_seconds ? `${Math.floor(Math.round(asset.duration_seconds) / 60)}m ${Math.round(asset.duration_seconds) % 60}s` : '', asset.sample_rate_hz ? `${asset.sample_rate_hz} Hz` : ''].filter(Boolean);
-        detail.append(el('p', measurements.join(' · '))); card.append(detail);
-      });
-      if (item.releaseURL) { const link = el('a', 'Release notes and original files'); link.href = item.releaseURL; card.append(link); }
-      results.append(card);
+  function render() {
+    const visible = new Set(filterEntries(catalogItems, search.value, locale.value, voice.value));
+    let pinned = 0;
+    catalogItems.forEach((item, index) => {
+      const card = catalogCards[index];
+      const player = card.querySelector('audio');
+      const playing = player && !player.paused && !player.ended;
+      if (!visible.has(item) && (playing || card.contains(document.activeElement))) pinnedItems.add(item);
+      const keepPinned = !visible.has(item) && pinnedItems.has(item);
+      card.hidden = !visible.has(item) && !keepPinned;
+      const note = card.querySelector('[data-filter-pinned]');
+      if (note) {
+        note.hidden = !keepPinned;
+        if (keepPinned) {
+          pinned += 1;
+          note.textContent = playing
+            ? 'Currently playing; this edition does not match the current filters.'
+            : player?.ended
+              ? 'Playback ended; this edition does not match the current filters. Its player remains available to replay.'
+              : player && !player.paused
+                ? 'Player active; this edition does not match the current filters. Its controls remain available.'
+                : player
+                  ? `Paused at ${formatPlaybackTime(player.currentTime)}; this edition does not match the current filters. Its controls remain available to resume.`
+                  : 'This edition does not match the current filters but remains available while its controls have focus.';
+        }
+      }
     });
+    resultsCount.textContent = visible.size
+      ? `${visible.size} matching session ${visible.size === 1 ? 'edition' : 'editions'}${pinned ? `; ${pinned} nonmatching ${pinned === 1 ? 'edition remains' : 'editions remain'} available below` : ''}`
+      : `No session editions match these filters${pinned ? `; ${pinned} nonmatching ${pinned === 1 ? 'edition remains' : 'editions remain'} available below` : ''}.`;
+    if (noResults) noResults.hidden = visible.size > 0;
+    if (clearFilters) clearFilters.hidden = !filterControls.some(([, control]) => control.value);
+  }
+
+  function formatPlaybackTime(seconds) {
+    const value = Number.isFinite(seconds) && seconds > 0 ? Math.floor(seconds) : 0;
+    return `${Math.floor(value / 60)}:${String(value % 60).padStart(2, '0')}`;
+  }
+
+  function createSessionCard(item) {
+    const card = el('article', undefined, 'session-card');
+    card.dataset.functionId = item.id;
+    const title = el('h3'); const page = el('a', item.title);
+    page.href = item.href; title.append(page); card.append(title);
+    card.append(el('p', `${item.id} · ${item.locale} · ${item.voice} · v${item.edition}`, 'session-meta'));
+    const pinned = el('p', 'Currently playing; this edition does not match the current filters.', 'filter-pinned-status');
+    pinned.hidden = true; pinned.setAttribute('data-filter-pinned', ''); pinned.setAttribute('role', 'status');
+    card.append(pinned);
+    if (item.description) card.append(el('p', item.description));
+    const mp3 = item.assets.find(a => a.format === 'mp3');
+    if (mp3) {
+      const player = el('audio'); player.controls = true; player.preload = 'none'; player.src = mp3.download_url;
+      player.setAttribute('aria-label', `Listen to ${item.title}, ${item.locale}, ${item.voice}, edition ${item.edition}`);
+      ['play', 'pause', 'ended', 'seeked'].forEach(event => player.addEventListener(event, render));
+      card.append(player);
+    }
+    item.assets.forEach(asset => {
+      const format = String(asset.format || 'file').toUpperCase();
+      const row = el('div', undefined, 'asset-row');
+      const label = el('label'); const checkbox = el('input'); checkbox.type = 'checkbox'; checkbox.checked = selection.has(asset.asset_id);
+      checkbox.setAttribute('aria-label', downloadActionName('Select', format, item));
+      checkbox.addEventListener('change', () => { if (checkbox.checked) selection.set(asset.asset_id, asset); else selection.delete(asset.asset_id); updateSelection(); });
+      label.append(checkbox, document.createTextNode(` Select ${format}`));
+      const link = el('a', `Download ${format}`); link.href = asset.download_url;
+      link.setAttribute('aria-label', downloadActionName('Download', format, item));
+      row.append(label, link); card.append(row);
+      const detail = el('details'); detail.append(el('summary', `${asset.filename} — checksum and details`));
+      detail.append(el('code', asset.sha256));
+      const measurements = [asset.size_bytes ? `${(asset.size_bytes / 1048576).toFixed(1)} MiB` : '', asset.duration_seconds ? `${Math.floor(Math.round(asset.duration_seconds) / 60)}m ${Math.round(asset.duration_seconds) % 60}s` : '', asset.sample_rate_hz ? `${asset.sample_rate_hz} Hz` : ''].filter(Boolean);
+      detail.append(el('p', measurements.join(' · '))); card.append(detail);
+    });
+    if (item.releaseURL) { const link = el('a', 'Release notes and original files'); link.href = item.releaseURL; card.append(link); }
+    return card;
   }
   Promise.all([
     fetch('catalog.json').then(response => { if (!response.ok) throw new Error('Catalog unavailable'); return response.json(); }),
@@ -117,11 +192,26 @@
     [...new Set(items.map(i => i.locale))].sort().forEach(value => { const option = el('option', value); option.value = value; locale.append(option); });
     const voices = new Map(items.map(i => [i.voiceId, i.voice]));
     [...voices].sort().forEach(([value, name]) => { const option = el('option', name); option.value = value; voice.append(option); });
+    restoreFilterState();
     const functionId = new URLSearchParams(location.search).get('function');
     if (functionId) search.value = functionId;
     search.disabled = false;
-    [search, locale, voice].forEach(control => control.addEventListener('input', () => render(items)));
-    render(items); updateSelection();
+    catalogItems = items;
+    catalogCards = items.map(createSessionCard);
+    results.replaceChildren(...catalogCards);
+    const onFilter = () => { saveFilterState(); render(); };
+    filterControls.forEach(([, control]) => {
+      control.addEventListener('input', onFilter);
+      control.addEventListener('change', onFilter);
+    });
+    clearFilters?.addEventListener('click', () => {
+      filterControls.forEach(([, control]) => { control.value = ''; });
+      pinnedItems.clear();
+      const url = new URL(location.href); url.searchParams.delete('function');
+      history.replaceState({}, '', url);
+      saveFilterState(); render(); search.focus();
+    });
+    render(); updateSelection();
   }).catch(() => {
     count.textContent = 'Catalog unavailable'; status.hidden = false;
     status.replaceChildren(el('h3', 'The catalog could not be loaded'), el('p', 'Please retry, or use the GitHub Releases link above.'));

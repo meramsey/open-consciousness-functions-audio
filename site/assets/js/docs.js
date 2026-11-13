@@ -1,7 +1,12 @@
 /* Progressive enhancement for generated OCF documentation pages. */
 (() => {
   'use strict';
-  const normalize = value => String(value || '').normalize('NFKC').toLocaleLowerCase();
+  const normalize = value => String(value || '')
+    .normalize('NFKC')
+    .toLocaleLowerCase('en-US')
+    .replace(/[\p{P}\p{S}]+/gu, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
   const matches = (node, query, category = '', audio = '', language = '', voice = '') => {
     const terms = normalize(query);
     const categoryMatches = !category || (node.dataset.category || '').split(/\s+/).includes(category);
@@ -35,27 +40,51 @@
 
   const themeButton = document.querySelector('[data-theme-toggle]');
   if (themeButton) {
-    const systemTheme = window.matchMedia?.('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
-    const setTheme = theme => {
-      document.documentElement.dataset.theme = theme;
-      themeButton.setAttribute('aria-pressed', String(theme === 'dark'));
-      themeButton.textContent = theme === 'dark' ? 'Light theme' : 'Dark theme';
+    const themes = ['system', 'light', 'dark'];
+    const setThemePreference = preference => {
+      if (preference === 'system') document.documentElement.removeAttribute('data-theme');
+      else document.documentElement.dataset.theme = preference;
+      const label = preference[0].toUpperCase() + preference.slice(1);
+      themeButton.textContent = `Theme: ${label}`;
+      themeButton.setAttribute('aria-label', `Color theme: ${label}. Activate to change.`);
+      themeButton.dataset.themePreference = preference;
     };
-    let initialTheme = systemTheme;
+    let preference = 'system';
     try {
       const saved = localStorage.getItem('ocf-theme');
-      if (saved === 'light' || saved === 'dark') initialTheme = saved;
-      setTheme(initialTheme);
+      if (themes.includes(saved)) preference = saved;
+      setThemePreference(preference);
       themeButton.addEventListener('click', () => {
-        const next = document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark';
-        setTheme(next);
-        try { localStorage.setItem('ocf-theme', next); } catch (_) { /* Keep theme toggle usable without storage. */ }
+        preference = themes[(themes.indexOf(preference) + 1) % themes.length];
+        setThemePreference(preference);
+        try { localStorage.setItem('ocf-theme', preference); } catch (_) { /* Keep the theme control usable without storage. */ }
       });
     } catch (_) {
-      setTheme(initialTheme);
-      themeButton.addEventListener('click', () => setTheme(document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark'));
+      setThemePreference(preference);
+      themeButton.addEventListener('click', () => {
+        preference = themes[(themes.indexOf(preference) + 1) % themes.length];
+        setThemePreference(preference);
+      });
     }
   }
+
+  const filterState = (scope, controls) => {
+    const key = `ocf-filters:${location.pathname}:${scope}`;
+    try {
+      const saved = JSON.parse(sessionStorage.getItem(key) || '{}');
+      for (const control of controls) {
+        if (control && typeof saved[control.id] === 'string') control.value = saved[control.id];
+      }
+    } catch (_) { /* Filtering remains usable if session storage is unavailable. */ }
+    return () => {
+      try {
+        sessionStorage.setItem(key, JSON.stringify(Object.fromEntries(
+          controls.filter(Boolean).map(control => [control.id, control.value]),
+        )));
+      } catch (_) { /* Do not block filtering when storage is unavailable. */ }
+    };
+  };
+  if ('scrollRestoration' in history) history.scrollRestoration = 'auto';
 
   const directorySearch = document.querySelector('[data-function-search]');
   const categoryFilter = document.querySelector('[data-category-filter]');
@@ -63,8 +92,12 @@
   const languageFilter = document.querySelector('[data-directory-language]');
   const voiceFilter = document.querySelector('[data-directory-voice]');
   const directoryCount = document.querySelector('[data-directory-count]');
+  const directoryClear = document.querySelector('[data-function-clear]');
+  const directoryNoResults = document.querySelector('[data-function-no-results]');
   const functionCards = [...document.querySelectorAll('[data-function-card]')];
   const domainGroups = [...document.querySelectorAll('[data-domain-group]')];
+  const directoryControls = [directorySearch, categoryFilter, audioFilter, languageFilter, voiceFilter].filter(Boolean);
+  const saveDirectoryFilters = filterState('directory', directoryControls);
   const updateDirectory = () => {
     if (!directorySearch) return;
     let shown = 0;
@@ -77,14 +110,27 @@
       group.hidden = !group.querySelector('[data-function-card]:not([hidden])');
     }
     if (directoryCount) directoryCount.textContent = `${shown} ${shown === 1 ? 'function' : 'functions'}`;
+    if (directoryNoResults) directoryNoResults.hidden = shown > 0;
+    if (directoryClear) directoryClear.hidden = !directoryControls.some(control => control.value);
   };
-  [directorySearch, categoryFilter, audioFilter, languageFilter, voiceFilter].filter(Boolean).forEach(control => control.addEventListener('input', updateDirectory));
+  directoryControls.forEach(control => {
+    control.addEventListener('input', () => { saveDirectoryFilters(); updateDirectory(); });
+    control.addEventListener('change', () => { saveDirectoryFilters(); updateDirectory(); });
+  });
+  directoryClear?.addEventListener('click', () => {
+    directoryControls.forEach(control => { control.value = ''; });
+    saveDirectoryFilters(); updateDirectory(); directorySearch?.focus();
+  });
   updateDirectory();
 
   const referenceSearch = document.querySelector('[data-reference-search]');
   const referenceCategory = document.querySelector('[data-reference-category]');
   const referenceCount = document.querySelector('[data-reference-count]');
+  const referenceClear = document.querySelector('[data-reference-clear]');
+  const referenceNoResults = document.querySelector('[data-reference-no-results]');
   const referenceRows = [...document.querySelectorAll('[data-reference-row]')];
+  const referenceControls = [referenceSearch, referenceCategory].filter(Boolean);
+  const saveReferenceFilters = filterState('quick-reference', referenceControls);
   const updateReference = () => {
     if (!referenceSearch) return;
     let shown = 0;
@@ -94,8 +140,17 @@
       if (visible) shown += 1;
     }
     if (referenceCount) referenceCount.textContent = `${shown} ${shown === 1 ? 'function' : 'functions'}`;
+    if (referenceNoResults) referenceNoResults.hidden = shown > 0;
+    if (referenceClear) referenceClear.hidden = !referenceControls.some(control => control.value);
   };
-  [referenceSearch, referenceCategory].filter(Boolean).forEach(control => control.addEventListener('input', updateReference));
+  referenceControls.forEach(control => {
+    control.addEventListener('input', () => { saveReferenceFilters(); updateReference(); });
+    control.addEventListener('change', () => { saveReferenceFilters(); updateReference(); });
+  });
+  referenceClear?.addEventListener('click', () => {
+    referenceControls.forEach(control => { control.value = ''; });
+    saveReferenceFilters(); updateReference(); referenceSearch?.focus();
+  });
   updateReference();
 
   for (const details of document.querySelectorAll('details[data-transcript]')) {
