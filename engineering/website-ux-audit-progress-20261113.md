@@ -12,7 +12,8 @@ Continued the same PR16 worktree from exact clean head `4a886869f872f4ae816b04e6
 
 - System theme now supplies an opaque `--card` default and an OS-dark System override. Explicit Light/Dark and print values remain authoritative. Browser assertions compare computed card/menu surfaces against the resolved variable and check open-menu text contrast across OS light/dark × site system/light/dark.
 - Filtered playback stays pinned when a currently playing item stops, pauses or ends. Status distinguishes playback, pause time and completion; the pin survives subsequent filters, keeps focused controls accessible, and explicit Clear filters removes the pins. Cross-browser tests use a generated three-second silent WAV data URI and a keyboard-operable test-only play/pause control. They verify the actual DOM node, seek/current-time continuity, playing/paused/ended transitions, focus, resume and replay. This synthetic fixture is not released audio or physical-device evidence.
-- Full local browser results for this correction: Chromium **20 passed**; Firefox **19 passed, 1 Chromium-only mobile-emulation skip**; WebKit **19 passed, 1 Chromium-only mobile-emulation skip**. Build, site validation and focused Python/JS tests passed as recorded below. PR CI for the correction head is to be recorded after push/verification.
+- Full local browser results for this correction: Chromium **20 passed**; Firefox **19 passed, 1 Chromium-only mobile-emulation skip**; WebKit **19 passed, 1 Chromium-only mobile-emulation skip**. Build, site validation and focused Python/JS tests passed as recorded below.
+- PR16 correction head `e25991c9b250dc1bbb07f15d415747e642384105` passed all six CI matrix jobs in https://github.com/ocfproject-org/open-consciousness-functions-audio/actions/runs/43489377349. GitHub annotations noted pinned-action Node.js 20 deprecation and hosted macOS runner queue capacity; no CI test failures.
 
 ## Finding ledger (all 26)
 
