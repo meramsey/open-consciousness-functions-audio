@@ -4,7 +4,7 @@
 
 **Audited inputs:** audio deployment/main `09293ca7e5003f13e959fcdc39e57acb091c7c98`; source main/pin `704440da8e0379cee8dfd332203bc0001c0a5f27`.
 
-**Checkpoint 1 working branch:** `fix/website-ux-restore-usability-20261113`, based on audio `origin/main` at `09293ca7e5003f13e959fcdc39e57acb091c7c98`. This is an uncommitted draft; no PR, merge, deployment or live-domain verification has occurred.
+**Checkpoint 1 branch:** `fix/website-ux-restore-usability-20261113`, based on audio `origin/main` at `09293ca7e5003f13e959fcdc39e57acb091c7c98`. Draft PR [#16](https://github.com/ocfproject-org/open-consciousness-functions-audio/pull/16) is open for independent review. Its initial head is `593e6ce0953233447145035224b1255574554e4d`; PR CI was still running when this record was prepared. No merge, deployment or live-domain verification has occurred.
 
 ## Finding ledger (all 26)
 
