@@ -16,6 +16,7 @@ from build_public_site import (
     _catalog_sessions,
     _discovery_section,
     _downloads_page,
+    _function_audio_actions,
     _function_page,
     _historical_names_page,
     _inline,
@@ -36,6 +37,39 @@ from build_public_site import (
 
 
 class PublicSiteBuildTests(unittest.TestCase):
+    def test_function_title_actions_link_to_edition_player_and_direct_formats(self):
+        rows = []
+        for title, asset_suffix, edition in (
+            ("Relax", "a" * 64, "0.1.0"),
+            ("Relax", "b" * 64, "0.2.0"),
+        ):
+            rows.append({
+                "session": {
+                    "asset_id": f"asset-{asset_suffix}",
+                    "title": title,
+                    "locale": "en-US",
+                    "voice_name": "Example Voice",
+                    "edition": edition,
+                },
+                "group": {"title": title},
+                "release": {"version": edition},
+                "audio_assets": [
+                    {"format": "mp3", "download_url": f"https://github.com/example/{edition}/relax.mp3"},
+                    {"format": "flac", "download_url": f"https://github.com/example/{edition}/relax.flac"},
+                ],
+            })
+
+        html = _function_audio_actions(rows)
+
+        self.assertEqual(html.count('class="function-audio-action-group"'), 2)
+        for asset_suffix, edition in (("a" * 64, "0.1.0"), ("b" * 64, "0.2.0")):
+            self.assertIn(f'href="#session-asset-{asset_suffix}"', html)
+            self.assertIn(f'aria-label="Listen to Relax, en-US, edition {edition}"', html)
+            for fmt in ("mp3", "flac"):
+                self.assertIn(f'href="https://github.com/example/{edition}/relax.{fmt}"', html)
+                self.assertIn(f'aria-label="Download {fmt.upper()} for Relax, en-US, edition {edition}"', html)
+        self.assertEqual(_function_audio_actions([]), "")
+
     def test_download_directory_cards_are_responsive_and_contextual(self):
         groups = []
         for function_id, title in (("OCF-FND-004", "Relax"), ("OCF-BOD-001", "Brain Flow")):
