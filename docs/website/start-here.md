@@ -7,16 +7,26 @@ guided audio practices. Each function has a distinct purpose, command cues, and
 documented instructions. A title or cue does not by itself guarantee an effect
 or explain a complete activation procedure.
 
+## Preparation Learning
+
+Complete [Preparation Learning](../preparation-learning/) before using any OCF
+function. Only people who have already learned the official Human Plus
+preparation track may skip it. Preparation Learning is a separate introductory
+session, not one of the 58 function records. Its own published edition and
+matching transcript appear on its page when present in the verified release
+catalog.
+
 ## Choose one practice
 
 Start with one intention and read that function's guide before choosing an
 edition. You can listen, read its instructions first, or use a transcript. Pause,
-skip, or stop at any time. Do not listen while driving or doing anything that
-requires vigilance.
+skip parts of a recording, or stop listening at any time. Do not listen while
+driving or doing anything that requires vigilance.
 
 ## A suggested way to explore
 
-These three independent functions can be approachable starting points:
+After Preparation Learning, these three functions can be approachable starting
+points:
 
 1. [Relax — OCF-FND-004](../functions/OCF-FND-004/) — a gentle introduction to
    guided relaxation and the structure of OCF listening.
@@ -25,22 +35,15 @@ These three independent functions can be approachable starting points:
 3. [Think Fast — OCF-COG-007](../functions/OCF-COG-007/) — a thinking-oriented
    practice to explore through its own documented instructions.
 
-This is an optional browsing suggestion, not a required sequence. Each practice
-stands on its own; you can choose any function that fits your interest. Reading a
-guide does not mean an audio recording is available.
-
-## Preparation Learning
-
-[Preparation Learning](../preparation-learning/) is a separate introductory
-session, not one of the 58 function records. Its own published edition and
-matching transcript appear on its page when present in the verified release
-catalog.
+You can explore these functions in any order; the list is an optional browsing
+suggestion, not a required sequence among them. Reading a guide does not mean an
+audio recording is available.
 
 ## Learn the cues, then choose
 
-The [quick reference](../quick-reference/) distinguishes displayed cues from
-spoken cues. A cue identifies a command; it does not replace the documented
-steps. Browse [all functions](../functions/) by canonical category, or review
+The [quick reference](../quick-reference/) lists current spoken cues. A cue
+identifies a command; it does not replace the documented steps. Browse
+[all functions](../functions/) by canonical category, or review
 the [listening guide](../listening/) and your [device's audio settings](../listening/).
 
 ## After listening

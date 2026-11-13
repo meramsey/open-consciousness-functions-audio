@@ -357,6 +357,7 @@ def _validate_documentation_site(site_root: Path):
     )
     expected = {
         "start/index.html",
+        "historical-names/index.html",
         "listening/index.html",
         "listening/android/index.html",
         "listening/ios/index.html",

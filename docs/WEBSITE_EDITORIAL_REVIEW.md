@@ -5,14 +5,20 @@
 - Replaced the audio-only landing-page experience with clear Start Here,
   Listening Guide, Functions, Quick Reference, Related Functions, Downloads,
   and About paths while retaining direct access to the verified audio library.
+- Presented Preparation Learning first as a distinct introductory session,
+  followed by the optional three-function exploration list as a semantic ordered
+  list. Quick Reference language refers only to current spoken cues.
+- Added a separate Historical Names lookup page from the pinned OCF
+  `OCF_HISTORICAL_LOOKUP_CURRENT.md` source section; it contains only its recorded
+  matches and does not appear in ordinary function guides or Quick Reference.
 - Added short introduction copy and separately labeled instruction, lifecycle,
   function-specific precaution, audio, and relationship sections. General
   listening safety is linked once to the listening guide rather than repeated
   on every function page. Added purposeful headings, section navigation,
   breadcrumb links, and prominent cue styling.
-- Added optional beginner exploration descriptions for Relax, Focus, and Think
-  Fast. The wording explicitly states that these are independent practices and
-  not a mandatory progression.
+- Added an optional browsing order for Relax, Focus, and Think Fast after the
+  Preparation Learning step; the order among those three functions is not
+  mandatory.
 - Added general stereo/device guidance and Android, iOS/iPadOS, Windows, macOS,
   and Linux setup pages with dated vendor references and maintenance caveats.
 - Added transcript controls whose text is loaded only from the matching
@@ -24,10 +30,16 @@
 - Function title, description, cue, procedure, lifecycle, safety and approved
   relationship text is projected from the canonical OCF locale export. The site
   does not paraphrase those instructions or infer missing procedures.
-- Display cues and spoken cues remain separate. Historical aliases are visibly
-  labeled historical/inactive and are never promoted as current commands.
-- Draft tags/common-use metadata remains labeled as draft discovery metadata;
-  draft procedure text and relationship proposals are not emitted.
+- Function pages and Quick Reference show approved spoken cues only; display
+  variants and historical/inactive cues are not promoted as current commands.
+  Historical names, when listed, remain on the separate lookup-only page and do
+  not select an activation.
+- Cue copy controls were removed. Download rows retain their direct release URLs
+  and offer a copyable suggested local filename with an explicit manual-rename
+  fallback when the cross-origin server supplies its own filename.
+- Draft tags/common-use metadata and its approval state remain in the pinned
+  source projection but are filtered from public pages and search data. Draft
+  procedure text and relationship proposals remain excluded from the export.
 - Canonical narration, source/working transcripts, private reference material,
   source evidence paths, and unreleased text are not part of the website export.
 - Transcript wording remains exact to its published release edition; the site

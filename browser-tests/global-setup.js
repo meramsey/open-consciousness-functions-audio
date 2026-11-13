@@ -8,7 +8,8 @@ module.exports = async () => {
   if (!browserType) throw new Error(`Unsupported browser: ${browserName}`);
   const browser = await browserType.launch();
   try {
-    const receipt = JSON.parse(await fs.readFile('verified-site/site-build-receipt.json', 'utf8'));
+    const siteDir = process.env.SITE_DIR || 'verified-site';
+    const receipt = JSON.parse(await fs.readFile(`${siteDir}/site-build-receipt.json`, 'utf8'));
     await fs.mkdir('browser-artifacts', { recursive: true });
     await fs.writeFile('browser-artifacts/acceptance-receipt.json', `${JSON.stringify({
       source_commit: receipt.source_commit,
