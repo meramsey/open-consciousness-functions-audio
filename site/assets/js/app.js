@@ -78,8 +78,16 @@
   }
   function savePlaybackState(item, player) {
     if (!item || !player) return;
-    const ended = player.ended;
-    const position = !ended && Number.isFinite(player.currentTime) && player.currentTime > 0 ? player.currentTime : 0;
+    let previous = null;
+    try {
+      previous = JSON.parse(sessionStorage.getItem(playbackStateKey) || 'null');
+    } catch (_) { /* Continue with live media state when storage is unavailable. */ }
+    const previousMatches = previous && previous.functionId === item.id && previous.title === item.title && previous.locale === item.locale && previous.voiceId === item.voiceId && previous.edition === item.edition && Date.now() - previous.savedAt <= 30 * 60 * 1000;
+    const ended = player.ended || player.dataset.ocfResumeEnded === 'true' || (previousMatches && previous.ended === true && !player.dataset.ocfResumePosition);
+    const currentPosition = Number.isFinite(player.currentTime) && player.currentTime > 0 ? player.currentTime : 0;
+    const pendingPosition = Number(player.dataset.ocfResumePosition);
+    const previousPosition = previousMatches && Number.isFinite(previous.position) && previous.position > 0 ? previous.position : 0;
+    const position = ended ? 0 : currentPosition || (Number.isFinite(pendingPosition) && pendingPosition > 0 ? pendingPosition : previousPosition);
     if (position === 0 && !lastPlayedItem) return;
     try {
       sessionStorage.setItem(playbackStateKey, JSON.stringify({
@@ -216,7 +224,8 @@
         lastPlayedItem = item;
         try { sessionStorage.removeItem(playbackStateKey); } catch (_) { /* Keep playback usable if storage is unavailable. */ }
       });
-      ['pause', 'seeked', 'ended'].forEach(event => player.addEventListener(event, () => savePlaybackState(item, player)));
+      ['pause', 'ended'].forEach(event => player.addEventListener(event, () => savePlaybackState(item, player)));
+      player.addEventListener('seeked', () => savePlaybackState(item, player));
     }
     item.assets.forEach(asset => {
       const format = String(asset.format || 'file').toUpperCase();

@@ -105,8 +105,15 @@
       if (Number.isFinite(resumePosition) && resumePosition > 0) {
         const restorePosition = () => {
           try {
+            const finishRestore = () => {
+              if (Math.abs(audio.currentTime - resumePosition) < 0.25) delete audio.dataset.ocfResumePosition;
+            };
+            audio.addEventListener('seeked', finishRestore, {once: true});
             audio.currentTime = resumePosition;
-            delete audio.dataset.ocfResumePosition;
+            if (!audio.seeking && Math.abs(audio.currentTime - resumePosition) < 0.25) {
+              audio.removeEventListener('seeked', finishRestore);
+              delete audio.dataset.ocfResumePosition;
+            }
           } catch (_) { /* Leave native controls available if this browser cannot restore a seek yet. */ }
         };
         if (audio.readyState >= HTMLMediaElement.HAVE_METADATA) restorePosition();
