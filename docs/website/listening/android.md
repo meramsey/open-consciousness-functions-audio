@@ -7,9 +7,13 @@ detect your device's audio effects.
 
 ## Baseline
 
-- Use comfortable stereo headphones or earbuds when the selected edition is
-  designed for separate left and right channels. Wired headphones are a simple
-  option; compatible Bluetooth stereo headphones can also work.
+- Stereo headphones or stereo earbuds with separate left/right playback are
+  required for the intended binaural/channel-separated audio. Speakers, mono
+  mixing, or a single earpiece are not equivalent delivery of that audio. If you
+  cannot use this setup, use the written guide or an edition-matched transcript
+  if available, or skip the audio; no equivalent effects are promised.
+- Wired headphones are one option; compatible Bluetooth stereo headphones can
+  also provide separate left/right playback.
 - Keep left/right balance centered unless you use an accessibility adjustment.
 - Start at a comfortable, clearly audible level. Keep normal playback speed
   (1.0x); turn off unwanted repeat, shuffle, crossfade, and optional EQ/effects.
@@ -36,11 +40,11 @@ instructions rather than assuming Pixel menu paths apply.
 
 ## Mono audio and accessibility
 
-Accessibility features may offer mono audio and channel balance. Mono changes
-left/right presentation; keep it enabled if you need it. Accessibility and
-comfortable listening take priority over reproducing a particular stereo mix.
-If you choose mono, use the text transcript or another accessible format where
-helpful.
+Accessibility features may offer mono audio and channel balance. Mono mixes the
+left/right channels and is not equivalent delivery of the intended
+binaural/channel-separated audio. Keep mono or other accessibility settings
+enabled if you rely on them. Use the written guide or an edition-matched
+transcript if available, or skip the audio; no equivalent effects are promised.
 
 ## Troubleshooting
 

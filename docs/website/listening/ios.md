@@ -6,9 +6,13 @@ device processing for you.
 
 ## Baseline
 
-- Use comfortable stereo headphones or earbuds when the selected edition is
-  designed for separate left and right channels. Wired headphones are a simple
-  option; compatible Bluetooth stereo headphones can also work.
+- Stereo headphones or stereo earbuds with separate left/right playback are
+  required for the intended binaural/channel-separated audio. Speakers, mono
+  mixing, or a single earpiece are not equivalent delivery of that audio. If you
+  cannot use this setup, use the written guide or an edition-matched transcript
+  if available, or skip the audio; no equivalent effects are promised.
+- Wired headphones are one option; compatible Bluetooth stereo headphones can
+  also provide separate left/right playback.
 - Keep left/right balance centered unless you use an accessibility adjustment.
 - Start at a comfortable, clearly audible level. Keep normal playback speed
   (1.0x); turn off unwanted repeat, shuffle, crossfade, and optional EQ/effects.
@@ -28,9 +32,11 @@ Apple notes that Spatial Audio controls depend on supported models and apps. See
 ## Mono audio, balance, and headphone accommodations
 
 Open **Settings → Accessibility → Audio & Visual** to review Mono Audio and the
-left/right balance. Headphone Accommodations are optional accessibility
-settings. Do not disable an accessibility setting you rely on; use the playback
-format and text alternatives that work for you. See [Apple's iPhone audio
+left/right balance. Mono mixes the left/right channels and is not equivalent
+delivery of the intended binaural/channel-separated audio. Headphone
+Accommodations are optional accessibility settings. Do not disable an
+accessibility setting you rely on; use the written guide or an edition-matched
+transcript if available, or skip the audio. See [Apple's iPhone audio
 accessibility guide](https://support.apple.com/guide/iphone/iphb80ab7516/ios).
 
 ## Troubleshooting

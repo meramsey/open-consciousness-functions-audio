@@ -404,6 +404,42 @@ class PublicSiteBuildTests(unittest.TestCase):
         content = _recommended_settings("a" * 40)
         self.assertIn("automatic loudness normalization", content)
         self.assertIn("normal playback speed (1.0x)", content)
+        self.assertIn(
+            "Stereo headphones or stereo earbuds with separate left/right playback are required for the intended binaural/channel-separated audio.",
+            content,
+        )
+        self.assertIn(
+            "Speakers, mono mixing, or a single earpiece are not equivalent delivery of that audio.",
+            content,
+        )
+        self.assertIn("no equivalent effects are promised", content)
+        self.assertLess(
+            content.index("required for the intended binaural/channel-separated audio"),
+            content.index("Optional processing preferences"),
+        )
+        self.assertLess(
+            content.index("Preserve separate left/right playback"),
+            content.index("Optional processing preferences"),
+        )
+        self.assertNotIn("when the selected edition is designed", content)
+
+    def test_platform_guides_all_state_required_stereo_delivery_and_accessible_alternatives(self):
+        required = (
+            "Stereo headphones or stereo earbuds with separate left/right playback are\n"
+            "  required for the intended binaural/channel-separated audio."
+        )
+        for platform in ("android", "ios", "linux", "macos", "windows"):
+            with self.subTest(platform=platform):
+                content = Path(f"docs/website/listening/{platform}.md").read_text(
+                    encoding="utf-8"
+                )
+                self.assertIn(required, content)
+                self.assertIn(
+                    "Speakers, mono\n  mixing, or a single earpiece are not equivalent delivery of that audio.",
+                    content,
+                )
+                self.assertIn("or skip the audio", content)
+                self.assertNotIn("stereo baseline is optional", content)
 
     def test_audio_asset_specs_include_format_rate_channels_size_and_duration(self):
         specification = _asset_specification(

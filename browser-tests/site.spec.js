@@ -139,7 +139,7 @@ test('historical names appear only in their source-authoritative lookup page', a
   await expect(smell).not.toContainText('PLUS-SMELL GREATER');
   await expect(smell).not.toContainText('PLUS-SMELL LESSER');
   await expect(page.locator('[data-historical-name-entry][data-function-id="OCF-SEN-005"]')).not.toContainText('PLUS-TOUCH MORE');
-  await expect(page.locator('a[href*="OCF_HISTORICAL_LOOKUP_CURRENT.md"]')).toHaveAttribute('href', /9518e90f64b114963e445027fbe3e507965e22be/);
+  await expect(page.locator('a[href*="OCF_HISTORICAL_LOOKUP_CURRENT.md"]')).toHaveAttribute('href', /0bf813beaca8c7370c084b6e9d109a0d8e359f30/);
   await expect(page.getByText('A match never selects an activation target.')).toBeVisible();
   const unmapped = page.locator('.page-intro');
   await expect(unmapped).toContainText('these 15 functions');
@@ -264,6 +264,41 @@ test('Listening Guide and Preparation Learning clearly state preparation-first g
   await expect(intro).not.toContainText('not a verified official OCF policy');
   await expect(page.locator('main')).not.toContainText('Michael');
   await expect(page.locator('main')).not.toContainText('not a verified official OCF policy');
+  await noAxeViolations(page);
+});
+
+test('generated listening and all platform guides require stereo for binaural delivery without changing assets', async ({ page }) => {
+  const required = 'Stereo headphones or stereo earbuds with separate left/right playback are required for the intended binaural/channel-separated audio.';
+  await page.goto('/listening/');
+  const guide = await page.locator('main').innerText();
+  expect(guide).toContain(required);
+  expect(guide).toContain('Speakers, mono mixing, or a single earpiece are not equivalent delivery of that audio.');
+  expect(guide).toContain('use the written guide or an edition-matched transcript if available, or skip the audio');
+  expect(guide).toContain('no equivalent effects are promised');
+  expect(guide).not.toContain('Can I listen without stereo headphones?');
+  expect(guide).not.toContain('Yes. Speakers, mono playback');
+
+  const settings = page.locator('#recommended-audio-settings');
+  await expect(settings).toContainText(required);
+  await expect(settings.locator('h3')).toHaveText('Optional processing preferences');
+
+  for (const platform of ['android', 'ios', 'linux', 'macos', 'windows']) {
+    await page.goto(`/listening/${platform}/`);
+    const text = await page.locator('main').innerText();
+    expect(text, platform).toContain(required);
+    expect(text, platform).toContain('not equivalent delivery of that audio');
+    expect(text, platform).toContain('or skip the audio');
+    expect(text, platform).not.toContain('stereo baseline is optional');
+  }
+
+  const receipt = await page.request.get('/site-build-receipt.json').then(response => response.json());
+  expect(receipt.catalog_sha256).toBe('db878436e6e15fc64bd9f4b96a398d2612fbc78cf34033ff11f6a526ce137eac');
+  expect(receipt.published_session_count).toBe(59);
+  expect(receipt.audio_asset_count).toBe(118);
+  expect(receipt.published_releases[0].publication_manifest_sha256).toBe('48cb39bcc3dfd7f7e211b3093cd927c3a790cd9ad28d6b47faad956014c85c14');
+  await page.goto('/historical-names/');
+  await expect(page.locator('[data-historical-name-entry]')).toHaveCount(43);
+  expect(receipt.historical_name_count).toBe(95);
   await noAxeViolations(page);
 });
 
