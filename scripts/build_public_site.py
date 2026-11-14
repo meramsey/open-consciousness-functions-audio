@@ -526,6 +526,14 @@ def _listening_guide_for_publication(markdown, catalog, functions, sessions_by_f
     markdown = _replace_markdown_section(markdown, "Before listening", f"{before}\n\n{comfortable}")
     markdown = _replace_markdown_section(markdown, "A comfortable environment", "")
 
+    markdown = _replace_markdown_wrapped_once(
+        markdown,
+        "Preserve separate left/right stereo playback for intended binaural/channel-separated audio; "
+        "mono mixing does not provide equivalent delivery. Separately, check whether",
+        "Check whether",
+        "redundant player stereo reminder",
+    )
+
     accessibility = _markdown_section_body(markdown, "Accessibility")
     repeated_stereo = (
         "If you cannot use separate left/right stereo headphones or earbuds, use the written guide or an "
@@ -805,6 +813,16 @@ def build_public_site(
             sessions_by_function,
         )
         listening_html = render_markdown(listening_markdown)
+        # Retain incoming links when consolidating/renaming public guide sections.
+        for old_id, current_id in (
+            ("welcome-to-ocf", "listening-guide"),
+            ("what-ocf-is", "project-overview"),
+            ("a-comfortable-environment", "before-listening"),
+        ):
+            heading = f'<h2 id="{current_id}">' if current_id != "listening-guide" else f'<h1 id="{current_id}">'
+            _require(listening_html.count(heading) == 1, f"legacy listening destination missing: {current_id}")
+            listening_html = listening_html.replace(heading, f'<span id="{old_id}"></span>' + heading, 1)
+
         preparation_paragraph = f"<p>{_html(PREPARATION_FIRST_GUIDANCE)}</p>"
         _require(
             listening_html.count(preparation_paragraph) == 1,

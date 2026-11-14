@@ -1203,6 +1203,12 @@ test('Listening Guide and Preparation Learning clearly state preparation-first g
   expect(guideText.match(/Stereo headphones or stereo earbuds with separate left\/right playback are required/g)).toHaveLength(1);
   expect(guideText.match(/Do not listen while driving, operating equipment, or doing anything requiring vigilance\./g)).toHaveLength(1);
   expect(guideText).not.toContain('What OCF is');
+  expect(guideText).not.toContain('mono mixing does not provide equivalent delivery. Separately');
+  expect(guideText).not.toContain('Preserve separate left/right stereo playback for intended');
+  for (const id of ['welcome-to-ocf', 'what-ocf-is', 'a-comfortable-environment']) {
+    await expect(page.locator(`[id="${id}"]`)).toHaveCount(1);
+  }
+
   expect(guideText).toContain('58 of 58 canonical function guides have at least one published recording');
   expect(guideText).toContain('audio-0.1.0-a6-20261111 (edition 0.1.0)');
   await noAxeViolations(page);
