@@ -1199,6 +1199,18 @@ test('Listening Guide and Preparation Learning clearly state preparation-first g
   await expect(page.locator('main')).not.toContainText('Function guides distinguish exact display cues from exact spoken cues.');
   await expect(page.locator('main')).not.toContainText('Michael');
   await expect(page.locator('main')).not.toContainText('not a verified official OCF policy');
+  const guideText = await page.locator('main').innerText();
+  expect(guideText.match(/Stereo headphones or stereo earbuds with separate left\/right playback are required/g)).toHaveLength(1);
+  expect(guideText.match(/Do not listen while driving, operating equipment, or doing anything requiring vigilance\./g)).toHaveLength(1);
+  expect(guideText).not.toContain('What OCF is');
+  expect(guideText).not.toContain('mono mixing does not provide equivalent delivery. Separately');
+  expect(guideText).not.toContain('Preserve separate left/right stereo playback for intended');
+  for (const id of ['welcome-to-ocf', 'what-ocf-is', 'a-comfortable-environment']) {
+    await expect(page.locator(`[id="${id}"]`)).toHaveCount(1);
+  }
+
+  expect(guideText).toContain('58 of 58 canonical function guides have at least one published recording');
+  expect(guideText).toContain('audio-0.1.0-a6-20261111 (edition 0.1.0)');
   await noAxeViolations(page);
   await page.goto('/preparation-learning/');
   const intro = page.locator('.page-intro');
@@ -1223,8 +1235,8 @@ test('generated listening and all platform guides require stereo for binaural de
   expect(guide).not.toContain('Yes. Speakers, mono playback');
 
   const settings = page.locator('#recommended-audio-settings');
-  await expect(settings).toContainText(required);
-  await expect(settings.locator('h3')).toHaveText('Optional processing preferences');
+  await expect(settings).toContainText('Headphones and stereo');
+  await expect(settings.locator('h3')).toHaveText('Processing preferences');
 
   for (const platform of ['android', 'ios', 'linux', 'macos', 'windows']) {
     await page.goto(`/listening/${platform}/`);
@@ -1356,11 +1368,15 @@ test('cross-origin release response behavior is explicit without buffering the r
 });
 
 test('Quick Reference filters, keyboard controls, narrow widths, print, themes, transcript and deep links work', async ({ page, browserName }) => {
-  for (const width of [375, 768, 1024, 1440]) {
+  for (const width of [320, 375, 390, 768, 1024, 1440]) {
     await page.setViewportSize({ width, height: 900 });
     await page.goto('/quick-reference/');
     expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(width);
     await expect(page.locator('.reference-table tbody tr')).toHaveCount(58);
+    await expect(page.getByRole('table', {name: 'Current cues, function descriptions, and audio availability'})).toBeVisible();
+    await expect(page.locator('.reference-table tbody tr').first().locator('td[data-label="Description"]')).toBeVisible();
+    await expect(page.locator('.reference-table tbody tr').first().locator('td[data-label="Published audio availability"]')).toContainText('Published audio available');
+    expect(await page.locator('.reference-table').evaluate(table => table.scrollWidth <= table.clientWidth)).toBe(true);
     await expect(page.locator('.historical-cue')).toHaveCount(0);
     await expect(page.locator('.reference-table .copy-cue')).toHaveCount(0);
     await expect(page.locator('.reference-table strong').first()).toHaveText('Plus Automate');
@@ -1374,7 +1390,7 @@ test('Quick Reference filters, keyboard controls, narrow widths, print, themes, 
   await expect(page.locator('[data-reference-count]')).toHaveText('1 function');
   await search.fill('Plus Focus');
   await expect(page.locator('[data-reference-count]')).toHaveText('1 function');
-  const domain = page.getByLabel('Canonical domain');
+  const domain = page.getByLabel('Category');
   await domain.selectOption('foundation');
   await search.fill('OCF-EXP-001');
   await expect(page.locator('[data-reference-count]')).toHaveText('1 function');
@@ -1405,9 +1421,10 @@ test('Quick Reference filters, keyboard controls, narrow widths, print, themes, 
   await expect(transcript.locator('.transcript-search input')).toBeEnabled();
   const transcriptHeight = await transcript.locator('.transcript-body').evaluate(el => el.scrollHeight);
   expect(transcriptHeight).toBeGreaterThan(512);
-  expect(await transcript.locator('.transcript-body').evaluate(el => el.scrollHeight > el.clientHeight)).toBe(true);
-  await transcript.locator('.transcript-body').evaluate(el => { el.scrollTop = el.scrollHeight; });
-  expect(await transcript.locator('.transcript-body').evaluate(el => el.scrollTop)).toBeGreaterThan(0);
+  expect(await transcript.locator('.transcript-body').evaluate(el => getComputedStyle(el).maxHeight)).toBe('none');
+  expect(await transcript.locator('.transcript-body').evaluate(el => getComputedStyle(el).overflowY)).toBe('visible');
+  expect(await transcript.locator('.transcript-body').evaluate(el => el.scrollHeight <= el.clientHeight + 1)).toBe(true);
+  await transcript.locator('.transcript-body').evaluate(el => el.scrollIntoView({block: 'end'}));
   await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
   expect(await page.evaluate(() => window.scrollY)).toBeGreaterThan(0);
 
@@ -1423,6 +1440,109 @@ test('Quick Reference filters, keyboard controls, narrow widths, print, themes, 
     await fs.writeFile(path.join('browser-artifacts', 'quick-reference-print.pdf'), pdf);
     expect(pdf.byteLength).toBeGreaterThan(10_000);
   }
+  await noAxeViolations(page);
+});
+
+test('mobile Quick Reference cards retain descriptions, cues, and accurate audio status', async ({ page }) => {
+  await page.setViewportSize({width: 320, height: 900});
+  await page.goto('/quick-reference/');
+  const rows = page.locator('.quick-reference-table tbody tr[data-reference-row]');
+  await expect(rows).toHaveCount(58);
+  await expect(page.getByRole('columnheader', {name: 'Description'})).toHaveCount(1);
+  await expect(page.getByRole('columnheader', {name: 'Audio availability'})).toHaveCount(1);
+  for (const row of await rows.all()) {
+    for (const label of ['Current spoken cues', 'Description', 'Published audio availability']) {
+      const cell = row.locator(`td[data-label="${label}"]`);
+      await expect(cell).toBeVisible();
+      await expect(cell).toContainText(/\S/);
+    }
+  }
+  await expect(page.getByRole('table', {name: 'Current cues, function descriptions, and audio availability'})).toBeVisible();
+  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(320);
+  expect(await page.locator('.quick-reference-table').evaluate(table => table.scrollWidth <= table.clientWidth)).toBe(true);
+});
+
+test('all five device baselines render the exact source checklist as semantic lists', async ({ page }) => {
+  for (const platform of ['android', 'ios', 'windows', 'macos', 'linux']) {
+    const markdown = await fs.readFile(path.join(__dirname, '../docs/website/listening', `${platform}.md`), 'utf8');
+    const lines = markdown.split(/\r?\n/);
+    const start = lines.indexOf('## Baseline');
+    expect(start, `${platform} baseline heading exists in source`).toBeGreaterThanOrEqual(0);
+    const expected = [];
+    for (const line of lines.slice(start + 1)) {
+      if (/^## /.test(line)) break;
+      if (line.startsWith('- ')) expected.push(line.slice(2));
+      else if (expected.length && /^\s{2,}\S/.test(line)) expected[expected.length - 1] += ` ${line.trim()}`;
+      else if (line.trim()) throw new Error(`Unexpected non-list baseline content in ${platform}: ${line}`);
+    }
+    const pageResponse = await page.goto(`/listening/${platform}/`);
+    expect(pageResponse?.ok()).toBe(true);
+    const baseline = page.locator('#baseline');
+    const list = baseline.locator('xpath=following-sibling::ul[1]');
+    await expect(list).toBeVisible();
+    const actual = (await list.locator('li').allTextContents()).map(text => text.replace(/\s+/g, ' ').trim());
+    expect(actual).toEqual(expected.map(text => text.replace(/\s+/g, ' ').trim()));
+  }
+});
+
+test('mobile transcript expands into natural page reading and retries a failed exact-edition load', async ({ page }) => {
+  await page.setViewportSize({width: 375, height: 900});
+  let transcriptRequests = 0;
+  await page.route('**/transcripts/*.txt', async route => {
+    transcriptRequests += 1;
+    if (transcriptRequests === 1) await route.abort();
+    else await route.continue();
+  });
+  await page.goto('/functions/OCF-FND-004/');
+  const transcript = page.locator('[data-transcript]').first();
+  const summary = transcript.locator(':scope > summary');
+  await summary.scrollIntoViewIfNeeded();
+  const scrollBeforeExpansion = await page.evaluate(() => window.scrollY);
+  await summary.click();
+  await expect(transcript.locator('[data-transcript-status]')).toContainText('Transcript unavailable');
+  expect(Math.abs(await page.evaluate(() => window.scrollY) - scrollBeforeExpansion)).toBeLessThan(24);
+  const retry = transcript.locator('[data-transcript-retry]');
+  await expect(retry).toBeVisible();
+  await noAxeViolations(page);
+  await retry.focus();
+  await page.keyboard.press('Enter');
+  await expect.poll(() => transcript.locator('.transcript-body').textContent()).not.toContain('Transcript loads when expanded.');
+  await expect(transcript.locator('[data-transcript-status]')).toContainText('transcript loaded');
+  await expect(retry).toBeHidden();
+  expect(Math.abs(await page.evaluate(() => window.scrollY) - scrollBeforeExpansion)).toBeLessThan(24);
+  const body = transcript.locator('.transcript-body');
+  const mediaLayout = await body.evaluate(element => ({
+    maxHeight: getComputedStyle(element).maxHeight,
+    overflowY: getComputedStyle(element).overflowY,
+    scrollHeight: element.scrollHeight,
+    clientHeight: element.clientHeight,
+  }));
+  expect(mediaLayout.maxHeight).toBe('none');
+  expect(mediaLayout.overflowY).toBe('visible');
+  expect(mediaLayout.scrollHeight).toBeLessThanOrEqual(mediaLayout.clientHeight + 1);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(375);
+  await expect(transcript.getByRole('link', {name: /Download transcript text for Relax, edition 0.1.0, en-US/})).toHaveAttribute('href', /\/transcripts\/.*\.txt$/);
+  await expect(transcript.getByRole('link', {name: /Original release asset, TXT for Relax, edition 0.1.0, en-US/})).toHaveAttribute('href', /^https:\/\/github\.com\//);
+  const timed = page.getByRole('link', {name: /Download timed subtitles for Relax, edition 0.1.0, en-US/});
+  await expect(timed).toHaveAttribute('href', /\/transcripts\/.*\.vtt$/);
+  await expect(page.getByRole('link', {name: /Original release asset, VTT for Relax, edition 0.1.0, en-US/})).toHaveAttribute('href', /^https:\/\/github\.com\//);
+  expect(transcriptRequests).toBe(2);
+});
+
+test('About leads with reader context and keeps provenance in native disclosure', async ({ page }) => {
+  await page.goto('/about/');
+  await expect(page.locator('h1')).toHaveText('About OCF');
+  const introText = await page.locator('.page-intro').innerText();
+  expect(introText).toContain('independent, open-source library');
+  expect(introText).toContain('Read the guide');
+  expect(introText).toContain('Report a website or catalog issue');
+  expect(introText).not.toContain('source commit');
+  const transparency = page.locator('.technical-transparency');
+  await expect(transparency).not.toHaveAttribute('open', '');
+  await transparency.locator(':scope > summary').click();
+  await expect(transparency).toContainText('704440da8e0379cee8dfd332203bc0001c0a5f27');
+  await expect(transparency).toContainText('audio-0.1.0-a6-20261111');
+  await expect(page.locator('main')).toContainText('not healthcare or emergency advice');
   await noAxeViolations(page);
 });
 

@@ -389,10 +389,10 @@ def render_markdown(markdown):
             output.append(
                 f'<h{level} id="{_html(_slug(text))}">{_inline(text)}</h{level}>'
             )
-        elif all(line.startswith("- ") for line in lines):
+        elif (unordered_items := _unordered_list_items(lines)) is not None:
             output.append(
                 "<ul>"
-                + "".join(f"<li>{_inline(line[2:])}</li>" for line in lines)
+                + "".join(f"<li>{_inline(item)}</li>" for item in unordered_items)
                 + "</ul>"
             )
         elif (ordered_items := _ordered_list_items(lines)) is not None:
@@ -425,6 +425,23 @@ def _ordered_list_items(lines):
     return items or None
 
 
+def _unordered_list_items(lines):
+    items = []
+    for line in lines:
+        match = re.match(r"^- (.+)$", line)
+        if match:
+            items.append(match.group(1))
+        elif (
+            items
+            and re.match(r"^\s{2,}\S", line)
+            and not re.match(r"^\s*[-+*]\s", line)
+        ):
+            items[-1] += " " + line.strip()
+        else:
+            return None
+    return items or None
+
+
 def _read_markdown(content_dir: Path, relative: str):
     path = content_dir / relative
     resolved = path.resolve()
@@ -435,6 +452,145 @@ def _read_markdown(content_dir: Path, relative: str):
         f"website content file unavailable: {relative}",
     )
     return path.read_text(encoding="utf-8")
+
+
+def _markdown_section_body(markdown, heading):
+    pattern = re.compile(
+        rf"(?ms)^## {re.escape(heading)}\n\n(.*?)(?=^## |\Z)"
+    )
+    matches = list(pattern.finditer(markdown))
+    _require(len(matches) == 1, f"expected one Markdown section: {heading}")
+    return matches[0].group(1).strip()
+
+
+def _replace_markdown_section(markdown, heading, body):
+    pattern = re.compile(
+        rf"(?ms)^## {re.escape(heading)}\n\n.*?(?=^## |\Z)"
+    )
+    _require(len(pattern.findall(markdown)) == 1, f"expected one Markdown section: {heading}")
+    replacement = f"## {heading}\n\n{body.strip()}\n\n" if body.strip() else ""
+    return pattern.sub(lambda _: replacement, markdown, count=1)
+
+
+def _replace_markdown_once(markdown, old, new, label):
+    _require(markdown.count(old) == 1, f"expected one source passage to reorganize: {label}")
+    return markdown.replace(old, new, 1)
+
+
+def _replace_markdown_wrapped_once(markdown, old, new, label):
+    pattern = r"\s+".join(re.escape(word) for word in old.split())
+    matches = list(re.finditer(pattern, markdown))
+    _require(len(matches) == 1, f"expected one source passage to reorganize: {label}")
+    match = matches[0]
+    return markdown[:match.start()] + new + markdown[match.end():]
+
+
+def _function_audio_availability(functions, catalog, sessions_by_function):
+    releases = catalog["releases"]
+    scope = "; ".join(
+        f'{release["tag"]} (edition {release["version"]})' for release in releases
+    ) or "no published release in the verified catalog"
+    available = sum(bool(sessions_by_function.get(function["function_id"])) for function in functions)
+    preparation_count = sum(
+        len(group["sessions"])
+        for release in releases
+        for group in release.get("preparations", [])
+    )
+    return (
+        f"{available} of {len(functions)} canonical function guides have at least one published recording "
+        f"in the verified catalog snapshot ({scope}). The {preparation_count} Preparation Learning "
+        "session is listed separately from function records. Check an individual guide for the "
+        "exact published locale, voice, and edition; this snapshot does not promise future availability."
+    )
+
+
+def _listening_guide_for_publication(markdown, catalog, functions, sessions_by_function):
+    markdown = markdown.replace(STALE_CUE_DISTINCTION_NOTE, "")
+    markdown = _replace_markdown_once(markdown, "# Welcome to OCF", "# Listening Guide", "page title")
+    markdown = _replace_markdown_section(
+        markdown,
+        "What OCF is",
+        "For the project overview and optional first-practice suggestions, see "
+        "[About OCF](../about/) and [Start Here](../start/).",
+    )
+    markdown = _replace_markdown_once(markdown, "## What OCF is", "## Project overview", "overview section label")
+
+    before = _markdown_section_body(markdown, "Before listening")
+    comfortable = " ".join(_markdown_section_body(markdown, "A comfortable environment").split())
+    repeated_safe_place = "Choose a place where you can safely give the recording your attention. "
+    _require(comfortable.startswith(repeated_safe_place), "comfortable-environment opening changed")
+    comfortable = comfortable[len(repeated_safe_place):]
+    repeated_vigilance = " Do not listen while driving, operating equipment, or doing anything that requires vigilance."
+    _require(comfortable.count(repeated_vigilance.strip()) == 1, "comfortable-environment safety reminder changed")
+    comfortable = comfortable.replace(repeated_vigilance.strip(), "", 1).strip()
+    markdown = _replace_markdown_section(markdown, "Before listening", f"{before}\n\n{comfortable}")
+    markdown = _replace_markdown_section(markdown, "A comfortable environment", "")
+
+    markdown = _replace_markdown_wrapped_once(
+        markdown,
+        "Preserve separate left/right stereo playback for intended binaural/channel-separated audio; "
+        "mono mixing does not provide equivalent delivery. Separately, check whether",
+        "Check whether",
+        "redundant player stereo reminder",
+    )
+
+    accessibility = _markdown_section_body(markdown, "Accessibility")
+    repeated_stereo = (
+        "If you cannot use separate left/right stereo headphones or earbuds, use the written guide or an "
+        "edition-matched transcript if available, or skip the audio. These text options provide access to "
+        "wording; they are not equivalent delivery of the binaural audio or a promise of equivalent effects."
+    )
+    accessibility = " ".join(accessibility.split())
+    _require(repeated_stereo in accessibility, "accessibility stereo alternatives changed")
+    accessibility = accessibility.replace(
+        repeated_stereo,
+        "For the required stereo setup and available text alternatives, see "
+        "[Headphones and stereo](#headphones-and-stereo). The text alternatives provide access to wording; "
+        "they are not equivalent delivery of the binaural audio or a promise of equivalent effects.",
+        1,
+    )
+    markdown = _replace_markdown_section(markdown, "Accessibility", accessibility)
+
+    availability_answer = _function_audio_availability(functions, catalog, sessions_by_function)
+    markdown = _replace_markdown_wrapped_once(
+        markdown,
+        "No. Function documentation and published audio availability are separate. Check the edition list "
+        "on the function page; a catalog entry does not promise a recording.",
+        availability_answer,
+        "inventory-derived recording availability",
+    )
+    markdown = _replace_markdown_wrapped_once(
+        markdown,
+        "Yes. Stereo headphones or stereo earbuds with separate left/right playback are required for the intended "
+        "binaural/channel-separated audio. Speakers, mono mixing, or a single earpiece are not equivalent delivery "
+        "of that audio. If you cannot use this setup, use the written guide or an edition-matched transcript if "
+        "available, or skip the audio; no equivalent effects are promised. Keep any accessibility settings you rely on.",
+        "See [Headphones and stereo](#headphones-and-stereo) for the required setup, limitations, and available text alternatives.",
+        "stereo FAQ cross-link",
+    )
+    markdown = _replace_markdown_wrapped_once(
+        markdown,
+        "Use the function's documented activation steps. A cue identifies a command but does not supply missing "
+        "timing, repetition, breathing, or release instructions.",
+        "See [Commands and cues](#commands-and-cues) above; do not infer missing activation details from a cue.",
+        "cue FAQ cross-link",
+    )
+    markdown = _replace_markdown_wrapped_once(
+        markdown,
+        "No particular sensation is required. Read the documented purpose and choose whether the practice is useful "
+        "or comfortable for you.",
+        "No particular sensation is required. See [Imagery is not required](#imagery-is-not-required) above.",
+        "imagery FAQ cross-link",
+    )
+    markdown = _replace_markdown_wrapped_once(
+        markdown,
+        "Use the transcript attached to the exact voice, locale, and edition you selected. Do not substitute current "
+        "function-guide wording for a published edition's transcript.",
+        "Use the exact voice-, locale-, and edition-matched transcript described in [Transcripts](#transcripts) above. "
+        "Do not substitute current function-guide wording for a published edition's transcript.",
+        "transcript FAQ cross-link",
+    )
+    return markdown
 
 
 def _catalog_sessions(catalog):
@@ -650,10 +806,23 @@ def build_public_site(
             ),
         )
         listening_source = guide_export["listening_guide"]["markdown"]
-        listening_markdown = listening_source.replace(
-            STALE_CUE_DISTINCTION_NOTE, ""
+        listening_markdown = _listening_guide_for_publication(
+            listening_source,
+            catalog,
+            functions,
+            sessions_by_function,
         )
         listening_html = render_markdown(listening_markdown)
+        # Retain incoming links when consolidating/renaming public guide sections.
+        for old_id, current_id in (
+            ("welcome-to-ocf", "listening-guide"),
+            ("what-ocf-is", "project-overview"),
+            ("a-comfortable-environment", "before-listening"),
+        ):
+            heading = f'<h2 id="{current_id}">' if current_id != "listening-guide" else f'<h1 id="{current_id}">'
+            _require(listening_html.count(heading) == 1, f"legacy listening destination missing: {current_id}")
+            listening_html = listening_html.replace(heading, f'<span id="{old_id}"></span>' + heading, 1)
+
         preparation_paragraph = f"<p>{_html(PREPARATION_FIRST_GUIDANCE)}</p>"
         _require(
             listening_html.count(preparation_paragraph) == 1,
@@ -1526,11 +1695,11 @@ def _session_card(row, transcript_paths, *, site_root_prefix="../../"):
         local = transcript_paths.get(asset["asset_id"])
         if fmt == "txt" and local:
             transcript_controls.append(
-                f'<details class="transcript" data-transcript><summary>{label} — edition {_html(session["edition"])} ({_html(session["locale"])})</summary><label class="transcript-search"><span>Search this transcript</span><input type="search" data-transcript-search disabled></label><pre class="transcript-body" data-transcript-src="{_html(site_root_prefix + local["path"])}" aria-live="polite">Transcript loads when expanded.</pre><p><a href="{_html(site_root_prefix + local["path"])}" download>Download transcript text</a> · <a href="{_html(asset["download_url"])}">Original release asset</a></p><details class="file-details"><summary>Transcript file details</summary><p>SHA-256: <code>{_html(asset["sha256"])}</code></p></details></details>'
+                f'<details class="transcript" data-transcript><summary>{label} — edition {_html(session["edition"])} ({_html(session["locale"])})</summary><p class="transcript-status" data-transcript-status role="status" aria-live="polite" hidden></p><label class="transcript-search"><span>Search this transcript</span><input type="search" data-transcript-search disabled></label><pre class="transcript-body" data-transcript-src="{_html(site_root_prefix + local["path"])}" aria-live="off">Transcript loads when expanded.</pre><button type="button" data-transcript-retry hidden>Retry loading transcript</button><p><a href="{_html(site_root_prefix + local["path"])}" download aria-label="Download transcript text for {_html(title)}, edition {_html(session["edition"])}, {_html(session["locale"])}">Download transcript text</a> · <a href="{_html(asset["download_url"])}" aria-label="Original release asset, TXT for {_html(title)}, edition {_html(session["edition"])}, {_html(session["locale"])}">Original release asset</a></p><details class="file-details"><summary>Transcript file details</summary><p>SHA-256: <code>{_html(asset["sha256"])}</code></p></details></details>'
             )
         elif local:
             transcript_controls.append(
-                f'<p><a href="{_html(site_root_prefix + local["path"])}" download>{label}</a> · <a href="{_html(asset["download_url"])}">Original release asset</a></p>'
+                f'<p><a href="{_html(site_root_prefix + local["path"])}" download aria-label="Download timed subtitles for {_html(title)}, edition {_html(session["edition"])}, {_html(session["locale"])}">{label}</a> · <a href="{_html(asset["download_url"])}" aria-label="Original release asset, VTT for {_html(title)}, edition {_html(session["edition"])}, {_html(session["locale"])}">Original release asset</a></p>'
             )
     companion_links = []
     for fmt, asset in sorted(companions.items()):
@@ -1641,13 +1810,13 @@ def _quick_reference(functions, sessions_by_function):
             )
         category = function["primary_category"]
         rows.append(
-            f'<tr data-reference-row data-search="{_html(" ".join(searchable).casefold())}" data-category="{_html(" ".join(category["id"] for category in function["categories"]))}"><th scope="row"><a href="../functions/{_html(function["function_id"])}/">{_html(function["title"]["text"])}</a><span class="stable-id">{_html(function["function_id"])}</span><span class="category-chip">{_html(category)}</span></th><td><ul>{"".join(cue_rows)}</ul></td><td>{_html(_public_description(function))}</td><td>{"Published audio available" if sessions_by_function.get(function["function_id"]) else "Audio unavailable"}</td></tr>'
+            f'<tr role="row" data-reference-row data-search="{_html(" ".join(searchable).casefold())}" data-category="{_html(" ".join(category["id"] for category in function["categories"]))}"><th role="rowheader" scope="row"><a href="../functions/{_html(function["function_id"])}/">{_html(function["title"]["text"])}</a><span class="stable-id">{_html(function["function_id"])}</span><span class="category-chip">{_html(category.title())}</span></th><td role="cell" data-label="Current spoken cues"><ul>{"".join(cue_rows)}</ul></td><td role="cell" data-label="Description">{_html(_public_description(function))}</td><td role="cell" data-label="Published audio availability">{"Published audio available" if sessions_by_function.get(function["function_id"]) else "Audio unavailable"}</td></tr>'
         )
     options = "".join(
-        f'<option value="{_html(item["id"])}">{_html(item["label"])}</option>'
+        f'<option value="{_html(item["id"])}">{_html(item["label"].title())}</option>'
         for item in _unique_categories(functions)
     )
-    return f"""<header class="page-intro"><p class="eyebrow">Approved spoken cues</p><h1>Quick Reference</h1><p>Find a spoken cue; use the function's documented steps rather than inferring a procedure from its name.</p></header><div class="reference-tools"><label for="reference-search">Search title, ID, spoken cue or description</label><input id="reference-search" type="search" data-reference-search><label for="reference-category">Canonical domain</label><select id="reference-category" data-reference-category><option value="">All domains</option>{options}</select><output data-reference-count aria-live="polite">58 functions</output><button type="button" data-reference-clear hidden>Clear filters</button><p class="filter-empty" data-reference-no-results role="status" hidden>No functions match these filters.</p></div><div class="table-scroll"><table class="reference-table quick-reference-table"><thead><tr><th scope="col">Function</th><th scope="col">Current spoken cues</th><th scope="col">Description</th><th scope="col">Audio availability</th></tr></thead><tbody>{"".join(rows)}</tbody></table></div>"""
+    return f"""<header class="page-intro"><p class="eyebrow">Approved spoken cues</p><h1>Quick Reference</h1><p>Find a spoken cue; use the function's documented steps rather than inferring a procedure from its name.</p></header><div class="reference-tools"><label for="reference-search">Search title, ID, spoken cue or description</label><input id="reference-search" type="search" data-reference-search><label for="reference-category">Category</label><select id="reference-category" data-reference-category><option value="">All categories</option>{options}</select><output data-reference-count aria-live="polite">58 functions</output><button type="button" data-reference-clear hidden>Clear filters</button><p class="filter-empty" data-reference-no-results role="status" hidden>No functions match these filters.</p></div><div class="table-scroll"><table role="table" class="reference-table quick-reference-table" aria-label="Current cues, function descriptions, and audio availability"><thead role="rowgroup"><tr role="row"><th role="columnheader" scope="col">Function</th><th role="columnheader" scope="col">Current spoken cues</th><th role="columnheader" scope="col">Description</th><th role="columnheader" scope="col">Audio availability</th></tr></thead><tbody role="rowgroup">{"".join(rows)}</tbody></table></div>"""
 
 
 def _historical_names_page(
@@ -1780,11 +1949,17 @@ def _about_page(guide_export, catalog, source_docs_url, transcript_counts):
         releases.append(
             f'<li><a href="{_html(release["release_url"])}">{_html(release["tag"])}</a> — edition {_html(release["version"])}; source OCF commit <code>{_html(release["source_ocf_commit"])}</code>.</li>'
         )
-    return f'''<header class="page-intro"><p class="eyebrow">Independent by design</p><h1>About this library</h1><p>OCF is an independent, open-source project. This website combines a pinned documentation projection with audio metadata from verified published release manifests.</p></header><section class="guide-section"><h2>Authority and provenance</h2><ul><li>Function titles, instructions, cues, lifecycle and approved relationships are projected from the canonical OCF en-US locale resources at source commit <code>{_html(guide_export["source_commit"])}</code>.</li><li>The documentation export contains 58 function records and {guide_export["build_receipt"]["approved_relationship_count"]} approved optional directional relationships; it excludes narration text and source-evidence paths.</li><li>Audio editions, their URLs and SHA-256 digests are sourced from the verified audio catalog. The site does not modify or republish the release.</li><li>Edition-matched transcript files copied for same-origin reading are checked against the published manifest's size and digest before the Pages artifact is built.</li></ul><p><a href="{SOURCE_REPOSITORY}/tree/{_html(guide_export["source_commit"])}">Pinned source tree</a> · <a href="{_html(source_docs_url)}">Source documentation</a></p></section><section class="guide-section"><h2>Published releases</h2><ul>{"".join(releases) if releases else "<li>No published release is present in the verified catalog.</li>"}</ul></section><section class="guide-section"><h2>What the site does not claim</h2><p>Documentation, audio availability, successful playback, and checksum validation do not establish efficacy, listening approval, rights clearance, or publication authorization beyond the verified release manifest.</p><p>OCF is not affiliated with The Monroe Institute or Hemi-Sync. The material is not healthcare or emergency advice.</p></section>'''
+    session_count = sum(
+        1
+        for release in catalog["releases"]
+        for group in release["functions"] + release.get("preparations", [])
+        for session in group["sessions"]
+    )
+    return f'''<header class="page-intro"><p class="eyebrow">Independent and open-source</p><h1>About OCF</h1><p>Open Consciousness Functions is an independent, open-source library of function guides and published recordings for self-directed practice.</p><p>Read the guide, explore current cues, and choose whether to listen or download an available edition. The verified catalog currently lists {session_count} session editions, including the separate Preparation Learning session.</p><p>OCF is not affiliated with The Monroe Institute or Hemi-Sync. The material is not healthcare or emergency advice.</p><p><a href="../start/">Start Here</a> · <a href="../functions/">Browse &amp; Listen</a> · <a href="{SITE_REPOSITORY}/issues">Report a website or catalog issue</a></p></header><details class="technical-transparency"><summary>Sources, versions and publishing details</summary><section class="guide-section"><h2>Documentation and audio sources</h2><ul><li>Function titles, instructions, cues, lifecycle and approved relationships come from the canonical OCF en-US locale resources at source commit <code>{_html(guide_export["source_commit"])}</code>.</li><li>The export contains {len(guide_export["functions"])} function records and {guide_export["build_receipt"]["approved_relationship_count"]} approved optional directional relationships; it excludes narration text and source-evidence paths.</li><li>Audio editions, original release URLs and SHA-256 digests come from verified published release manifests. The site does not modify or republish the release files.</li><li>Edition-matched transcripts copied for same-origin reading are checked against the published manifest's size and digest before the Pages artifact is built.</li></ul><p><a href="{SOURCE_REPOSITORY}/tree/{_html(guide_export["source_commit"])}">Pinned source tree</a> · <a href="{_html(source_docs_url)}">Source documentation</a></p><h2>Published release versions</h2><ul>{"".join(releases) if releases else "<li>No published release is present in the verified catalog.</li>"}</ul></section></details><section class="guide-section"><h2>What this library does not claim</h2><p>Documentation, audio availability, successful playback and checksum validation do not establish efficacy, listening approval, rights clearance, or publication authorization beyond the verified release manifest.</p></section>'''
 
 
 def _recommended_settings(source_commit):
-    return """<section class="guide-section" id="recommended-audio-settings"><h2>Stereo setup and optional audio settings</h2><p>Stereo headphones or stereo earbuds with separate left/right playback are required for the intended binaural/channel-separated audio. Speakers, mono mixing, or a single earpiece are not equivalent delivery of that audio. If you cannot use this setup, use the written guide or an edition-matched transcript if available, or skip the audio; no equivalent effects are promised. Keep any accessibility settings you rely on.</p><p>Preserve separate left/right playback and keep balance centered unless you use an accessibility adjustment.</p><h3>Optional processing preferences</h3><ul><li>Turn off optional spatial audio, head tracking, surround virtualization, EQ, audio enhancements, and crossfade when you want the unmodified stereo mix and those controls are available.</li><li>Disable unwanted repeat and shuffle, and disable automatic loudness normalization if the player offers that control. Use normal playback speed (1.0x).</li><li>Start at a comfortable low volume. Do not increase volume to chase a perceived effect.</li></ul><p>Optional processing choices are separate from the stereo requirement. The website cannot detect or turn off operating-system, headphone, driver, or player processing. Accessibility needs and comfortable listening take priority.</p></section>"""
+    return """<section class="guide-section" id="recommended-audio-settings"><h2>Optional audio processing</h2><p>For the required stereo setup and its alternatives, see <a href="#headphones-and-stereo">Headphones and stereo</a>.</p><p>Preserve separate left/right playback and keep balance centered unless you use an accessibility adjustment.</p><h3>Processing preferences</h3><ul><li>Turn off optional spatial audio, head tracking, surround virtualization, EQ, audio enhancements, and crossfade when you want the unmodified stereo mix and those controls are available.</li><li>Disable unwanted repeat and shuffle, and disable automatic loudness normalization if the player offers that control. Use normal playback speed (1.0x).</li><li>Start at a comfortable low volume. Do not increase volume to chase a perceived effect.</li></ul><p>Optional processing choices are separate from the required stereo delivery. The website cannot detect or turn off operating-system, headphone, driver, or player processing. Accessibility needs and comfortable listening take priority.</p></section>"""
 
 
 def _device_links():

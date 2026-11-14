@@ -291,18 +291,32 @@
 
   for (const details of document.querySelectorAll('details[data-transcript]')) {
     let loaded = false;
+    let loading = false;
     let transcriptText = '';
     const pre = details.querySelector('[data-transcript-src]');
     const search = details.querySelector('[data-transcript-search]');
+    const status = details.querySelector('[data-transcript-status]');
+    const retry = details.querySelector('[data-transcript-retry]');
     if (search) search.addEventListener('input', () => highlight(pre, transcriptText, search.value));
-    details.addEventListener('toggle', async () => {
-      if (!details.open || loaded) return;
+    const loadTranscript = async () => {
+      if (!details.open || loaded || loading) return;
       const path = safeTranscript(pre?.dataset.transcriptSrc, location.href);
       if (!pre || !path) {
         if (pre) pre.textContent = 'This transcript path is not available.';
+        if (status) {
+          status.hidden = false;
+          status.textContent = 'This transcript link is not available. Use the exact-edition download below.';
+        }
         loaded = true;
         return;
       }
+      loading = true;
+      if (status) {
+        status.hidden = false;
+        status.textContent = 'Loading the published transcript for this edition…';
+      }
+      if (retry) retry.hidden = true;
+      if (search) search.disabled = true;
       pre.textContent = 'Loading edition-matched transcript…';
       try {
         const response = await fetch(path, {credentials: 'omit'});
@@ -311,11 +325,17 @@
         highlight(pre, transcriptText, search?.value || '');
         if (search) search.disabled = false;
         loaded = true;
+        if (status) status.textContent = 'Published transcript loaded.';
       } catch (_) {
-        pre.textContent = 'The published transcript could not be loaded. Use the original release asset link below.';
-        if (search) search.disabled = true;
+        pre.textContent = 'The published transcript could not be loaded.';
+        if (status) status.textContent = 'Transcript unavailable. Retry, or use the exact-edition text and timed-subtitle links below.';
+        if (retry) retry.hidden = false;
+      } finally {
+        loading = false;
       }
-    });
+    };
+    details.addEventListener('toggle', () => { if (details.open) loadTranscript(); });
+    retry?.addEventListener('click', loadTranscript);
   }
 
   for (const button of document.querySelectorAll('[data-copy]')) {
