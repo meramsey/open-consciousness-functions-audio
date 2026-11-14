@@ -592,6 +592,7 @@ test('filtered-out synthetic media remains focused, understandable, seekable and
   await useSilentWavFixture(page);
   await page.goto('/functions/');
   const relax = page.locator('.session-card').filter({ has: page.getByRole('link', { name: 'Relax', exact: true }) });
+  await relax.getByRole('button', {name: /^Show player for/}).click();
   const player = relax.locator('audio');
   await expect(player).toBeAttached();
   await player.evaluate(audio => audio.load());
@@ -694,6 +695,7 @@ test('Back navigation preserves the same active synthetic player position and fi
   await useSilentWavFixture(page);
   await page.goto('/functions/');
   const relax = page.locator('.session-card').filter({has: page.getByRole('link', {name: 'Relax', exact: true})});
+  await relax.getByRole('button', {name: /^Show player for/}).click();
   const player = relax.locator('audio');
   await player.evaluate(audio => audio.load());
   await expect.poll(() => player.evaluate(audio => audio.duration)).toBeGreaterThan(2.9);
@@ -906,6 +908,8 @@ test('catalog keeps one synthetic player active and announces a controlled media
   await page.goto('/functions/');
   const relax = page.locator('.session-card').filter({ has: page.getByRole('link', { name: 'Relax', exact: true }) });
   const brain = page.locator('.session-card').filter({ has: page.getByRole('link', { name: 'Brain Flow', exact: true }) });
+  await relax.getByRole('button', {name: /^Show player for/}).click();
+  await brain.getByRole('button', {name: /^Show player for/}).click();
   const relaxPlayer = relax.locator('audio');
   const brainPlayer = brain.locator('audio');
   await Promise.all([relaxPlayer.evaluate(audio => audio.load()), brainPlayer.evaluate(audio => audio.load())]);
@@ -1591,4 +1595,26 @@ test('quality metadata, slim catalog, static fallback and narrow print stay trut
   await page.goto('/quick-reference/');
   await page.emulateMedia({media: 'print'});
   expect(await page.locator('tr[data-reference-row]').first().evaluate(el => getComputedStyle(el).display)).toBe('table-row');
+});
+
+
+test('browse constructs only requested players and preserves selection and identity', async ({ page }) => {
+  await page.goto('/functions/');
+  await expect(page.locator('.session-card')).toHaveCount(59);
+  await expect(page.locator('.session-card audio')).toHaveCount(0);
+  const card = page.locator('.session-card[data-function-id="OCF-FND-004"]');
+  const checkbox = card.locator('input[type="checkbox"]').first();
+  await checkbox.check();
+  await card.getByRole('button', {name: /^Show player for/}).focus();
+  await page.keyboard.press('Enter');
+  const player = card.locator('audio');
+  await expect(player).toBeFocused();
+  await expect(page.locator('.session-card audio')).toHaveCount(1);
+  expect(await player.evaluate(audio => audio.paused)).toBe(true);
+  await player.evaluate(audio => { audio.dataset.identity = 'original'; });
+  await page.locator('#search').fill('Brain Flow');
+  await page.locator('#search').fill('Relax');
+  await expect(player).toHaveAttribute('data-identity', 'original');
+  await expect(checkbox).toBeChecked();
+  await expect(page.locator('#selection-count')).toContainText('1 file selected');
 });
