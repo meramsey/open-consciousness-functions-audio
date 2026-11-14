@@ -112,3 +112,15 @@ Continued the same PR16 worktree from exact clean head `4a886869f872f4ae816b04e6
   - `/tmp/opencode/website-ux-checkpoint1-20261113/screenshots/checkpoint1-downloads-390.png`
   - `/tmp/opencode/website-ux-checkpoint1-20261113/screenshots/checkpoint1-downloads-1440.png`
 - At checkpoint 1, not run: physical phones/tablets, native Safari outside Playwright WebKit, released-audio probes, VoiceOver/TalkBack, live public site/DNS/TLS/redirect behavior, merge or deployment. Checkpoint 2 adds bounded Chromium/Firefox released-audio probes; it still does not establish human listening, physical-device or native Safari behavior. The source repository and private function-page audit deliverables are untouched. The separately queued Inner Power public-reference cleanup is excluded.
+
+## Checkpoint 5: static quality and deployment discovery
+
+Checkpoint4 PR19 merged at49b62868a76397842e84254a03fa546703d07797; Pages43549859636 and validation43549859650 succeeded. Public Pages and custom-domain Listening Guide matched reviewed artifacts over normal TLS. Review restored three legacy listening anchors and removed the remaining repeated Players stereo sentence.
+
+This checkpoint adds per-page canonical/Open Graph metadata at the centralized public origin https://ocfproject.org/, source-derived function descriptions, sitemap/robots and a noindex404 with absolute canonical-site navigation/assets. Normal pages retain relative links for GitHub project-path entry. No DNS, redirect, TLS or hosting-settings change is made.
+
+Browse now requests a233,795-byte presentation catalog instead of883,358-byte full provenance catalog (73.5% fewer uncompressed bytes). Independent review verified all59 rendered entry records match after excluding provenance. The unchanged full catalog remains available. Existing preload-none players remain eager DOM nodes to avoid destabilizing verified Back/seek behavior; on-demand construction remains a future optimization, not a completed claim.
+
+No-JavaScript browsing retains known published status, guides and direct download links; inert enhancement controls are hidden and transcript placeholders direct users to exact-edition text links. Legacy category queries are forwarded alongside function queries. Narrow print rows explicitly override mobile card layout.
+
+Build/site validation and193 offline Python tests passed; catalog26 and documentation13 JS assertions passed. Initial full Chromium32 passed/1 opt-in real-media skip; final post-review browser reruns are recorded in PR evidence. No physical device, native Safari, AT, field Core Web Vitals, human listening or new public-audio probe was performed. Function/cue/transcript review hold and all release files remain intact.

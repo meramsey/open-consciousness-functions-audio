@@ -271,7 +271,7 @@ test('Browse & Listen stays truthful without JavaScript or when catalog loading 
   await expect(noScriptPage.locator('audio')).toHaveCount(0);
   await noScriptContext.close();
 
-  await context.route('**/catalog.json', route => route.abort());
+  await context.route('**/browse-catalog.json', route => route.abort());
   await page.goto('/functions/');
   await expect(page.locator('.function-card')).toHaveCount(58);
   await expect(page.locator('#empty-state')).toContainText('could not be loaded');
@@ -1561,4 +1561,34 @@ test('mobile navigation, spoken cue text without redundant cue copy controls, fo
   await page.keyboard.press('Tab');
   await expect(page.locator(':focus')).toBeVisible();
   await noAxeViolations(page);
+});
+
+
+test('quality metadata, slim catalog, static fallback and narrow print stay truthful', async ({ browser, page }) => {
+  await page.goto('/functions/OCF-AUT-001/');
+  await expect(page.locator('link[rel="canonical"]')).toHaveAttribute('href', 'https://ocfproject.org/functions/OCF-AUT-001/');
+  await expect(page.locator('meta[property="og:title"]')).toHaveAttribute('content', /Automatic Action/);
+  const full = await page.request.get('/catalog.json').then(r => r.text());
+  const slim = await page.request.get('/browse-catalog.json').then(r => r.text());
+  expect(slim.length).toBeLessThan(full.length / 2);
+  expect(slim).not.toContain('provenance');
+  const sitemap = await page.request.get('/sitemap.xml').then(r => r.text());
+  expect(sitemap).toContain('https://ocfproject.org/functions/OCF-AUT-001/');
+  expect(sitemap).not.toContain('404.html');
+  await page.goto('/404.html');
+  await expect(page.locator('meta[name="robots"]')).toHaveAttribute('content', 'noindex');
+  await expect(page.locator('link[rel="canonical"]')).toHaveCount(0);
+  await expect(page.locator('main a').first()).toHaveAttribute('href', 'https://ocfproject.org/functions/');
+  const context = await browser.newContext({javaScriptEnabled: false});
+  const staticPage = await context.newPage();
+  await staticPage.goto('/functions/');
+  await expect(staticPage.locator('.library-tools')).toBeHidden();
+  await expect(staticPage.locator('.selection-tools')).toBeHidden();
+  await expect(staticPage.locator('#results-count')).not.toContainText('Loading');
+  await expect(staticPage.locator('[data-function-card]')).toHaveCount(58);
+  await context.close();
+  await page.setViewportSize({width: 320, height: 800});
+  await page.goto('/quick-reference/');
+  await page.emulateMedia({media: 'print'});
+  expect(await page.locator('tr[data-reference-row]').first().evaluate(el => getComputedStyle(el).display)).toBe('table-row');
 });

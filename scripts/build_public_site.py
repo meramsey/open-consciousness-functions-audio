@@ -20,6 +20,7 @@ from catalog import validate_catalog
 
 SOURCE_REPOSITORY = "https://github.com/ocfproject-org/open-consciousness-functions"
 SITE_REPOSITORY = "https://github.com/ocfproject-org/open-consciousness-functions-audio"
+PUBLIC_ORIGIN = "https://ocfproject.org/"
 EXPORTER = "ocf.public-site-guides/1"
 HISTORICAL_LOOKUP_SOURCE = "docs/releases/OCF_HISTORICAL_LOOKUP_CURRENT.md"
 PREPARATION_FIRST_GUIDANCE = (
@@ -776,6 +777,7 @@ def build_public_site(
                     source_commit,
                     toc=True,
                     toc_items=_function_toc_items(),
+                    description=_public_description(function),
                 ),
             )
 
@@ -947,6 +949,32 @@ def build_public_site(
             staging / "documentation-index.json",
             json.dumps(doc_index, ensure_ascii=False, indent=2, sort_keys=True) + "\n",
         )
+        # Browser catalog contains presentation fields only; full provenance remains in catalog.json.
+        browse_catalog = {"schema_version": catalog["schema_version"], "releases": []}
+        for release in catalog["releases"]:
+            public_release = {key: release[key] for key in ("date", "version", "release_url") if key in release}
+            for group_key in ("functions", "preparations"):
+                public_release[group_key] = []
+                for group in release.get(group_key, []):
+                    public_group = {key: group[key] for key in ("function_id", "title", "description") if key in group}
+                    public_group["sessions"] = []
+                    for session in group.get("sessions", []):
+                        public_session = {key: value for key, value in session.items() if key != "assets"}
+                        public_session["assets"] = [{key: value for key, value in asset.items() if key != "provenance"} for asset in session["assets"]]
+                        public_group["sessions"].append(public_session)
+                    public_release[group_key].append(public_group)
+            for key in ("collections", "companions"):
+                public_release[key] = [{field: asset[field] for field in ("filename", "download_url", "sha256") if field in asset} for asset in release.get(key, [])]
+            browse_catalog["releases"].append(public_release)
+        _write(staging / "browse-catalog.json", json.dumps(browse_catalog, ensure_ascii=False, separators=(",", ":"), sort_keys=True) + "\n")
+        urls = [PUBLIC_ORIGIN + (path.parent.relative_to(staging).as_posix() + "/" if path.parent != staging else "") for path in sorted(staging.rglob("index.html"))]
+        _write(staging / "sitemap.xml", '<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">' + "".join(f"<url><loc>{_html(url)}</loc></url>" for url in urls) + "</urlset>\n")
+        _write(staging / "robots.txt", f"User-agent: *\nAllow: /\nSitemap: {PUBLIC_ORIGIN}sitemap.xml\n")
+        not_found = _shell("Page not found — OCF", '<h1>Page not found</h1><p>This address may have changed. <a href="functions/">Browse or search the function library</a>, or <a href="start/">Start Here</a>.</p>', "", source_commit, root=True)
+        not_found = re.sub(r'href="(?!https:|#)([^"]+)"', lambda match: f'href="{PUBLIC_ORIGIN}{match.group(1)}"', not_found)
+        not_found = not_found.replace('src="assets/', f'src="{PUBLIC_ORIGIN}assets/').replace('<meta name="theme-color"', '<meta name="robots" content="noindex"><meta name="theme-color"')
+        not_found = re.sub(r'<link rel="canonical"[^>]+>|<meta property="og:url"[^>]+>', '', not_found)
+        _write(staging / "404.html", not_found)
         _write_site_receipt(
             staging,
             guide_export=guide_export,
@@ -1081,7 +1109,10 @@ def _shell(
     include_catalog=False,
     toc=False,
     toc_items=None,
+    description=None,
 ):
+    canonical = PUBLIC_ORIGIN + (current.strip("/") + "/" if current else "")
+    description = description or f"{title.removesuffix(' — OCF')}: OCF guides and verified published recordings."
     depth = 0 if root else current.count("/") + 1
     base = "../" * depth
     primary_nav = [
@@ -1143,9 +1174,10 @@ def _shell(
     content_class = "docs-content home-content" if root else "docs-content"
     return f'''<!doctype html>
 <html lang="en-US"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-<meta name="theme-color" content="#101a22"><meta name="description" content="Open Consciousness Functions documentation and published audio library.">
+<meta name="theme-color" content="#101a22"><meta name="description" content="{_html(description)}">
+<link rel="canonical" href="{_html(canonical)}"><meta property="og:type" content="website"><meta property="og:title" content="{_html(title)}"><meta property="og:description" content="{_html(description)}"><meta property="og:url" content="{_html(canonical)}"><meta name="twitter:card" content="summary">
 <title>{_html(title)}</title><link rel="icon" href="{base}assets/favicon.svg" type="image/svg+xml"><link rel="stylesheet" href="{base}assets/css/main.css"><link rel="stylesheet" href="{base}assets/css/website.css">
-{catalog_script}{docs_script}</head><body>
+{catalog_script}{docs_script}<noscript><style>.theme-toggle,.library-tools,.selection-tools,.reference-tools,.transcript-search{{display:none!important}}</style></noscript></head><body>
 <a class="skip-link" href="#main">Skip to content</a>
 <header class="site-header docs-header"><a class="brand" href="{logo_href}"{logo_current_attr}><span class="brand-mark" aria-hidden="true">OCF</span><span class="brand-name">Open Consciousness Functions<small>Audio and Guides</small></span></a>
 <nav class="desktop-nav" aria-label="Main navigation">{primary_links}{more_menu}</nav><details class="mobile-nav"><summary>Menu</summary><nav aria-label="Main navigation">{primary_links}{more_menu}</nav></details>
@@ -1312,7 +1344,7 @@ def _functions_index(functions, sessions_by_function, preparation_sessions):
         for category in category_options
         if cards_by_domain.get(category["id"])
     )
-    return f'''<header class="page-intro"><p class="eyebrow">Find a guide, then choose how to listen</p><h1>Browse &amp; Listen</h1><p>Search all {len(functions)} function guides by title, current spoken cue, category, or purpose. Each recording retains its original release files.</p><p class="preparation-note">{_html(PREPARATION_FIRST_GUIDANCE)} <a href="../preparation-learning/">Open Preparation Learning</a></p></header><section class="library-section browse-library" id="library" aria-labelledby="library-title"><div class="section-heading"><div><p class="eyebrow">Published editions and all function guides</p><h2 id="library-title">Find a practice</h2></div><span class="count" id="release-count">{session_count} recordings</span></div><p>Function guides remain available independently of audio.</p><div class="library-tools"><label class="sr-only" for="search">Search title, ID, description, current spoken cue, category, or use</label><input id="search" type="search" placeholder="Search functions, cues, categories, or uses" aria-describedby="results-count"><label for="category-filter">Category <select id="category-filter"><option value="">All categories</option>{options}</select></label>{audio_filter}{language_filter}{voice_filter}<button id="clear-library-filters" type="button" hidden>Clear filters</button></div><section class="release-banner browse-banner" aria-labelledby="release-title"><div class="release-symbol" aria-hidden="true">↗</div><div><p class="eyebrow">Published audio</p><h2 id="release-title">{session_count} session editions are listed</h2><p id="release-description">Search by practice and category. Open a function guide to read, listen, or download its original edition.</p></div><a class="text-link" href="https://github.com/ocfproject-org/open-consciousness-functions-audio/releases">All releases <span aria-hidden="true">↗</span></a></section><p id="empty-state" class="empty-state" role="status" hidden>No published recordings are listed in the verified catalog; function guides remain available.</p><p id="results-count" role="status" aria-live="polite">Loading audio details. Function guides remain available below.</p><p id="catalog-no-results" class="filter-empty" hidden>No functions match these filters.</p><div class="selection-tools"><span id="selection-count" role="status" aria-live="polite" tabindex="-1">0 files selected</span><button id="download-selection" disabled>Save download list</button><button id="playlist-selection" disabled>Save MP3 playlist</button><details id="selected-files-review" hidden><summary id="selected-files-summary">Review selected files (0)</summary><ul id="selected-files-list"></ul><button id="clear-selection" type="button">Clear selected files</button></details><p>Downloads open the original release assets. Detailed filenames, versions, and checksums are on each function guide.</p></div><div id="catalog-results">{groups}</div><div id="release-extras"></div></section><noscript><p>Search and player controls need JavaScript. Function guides and individual download links remain available above.</p></noscript>'''
+    return f'''<header class="page-intro"><p class="eyebrow">Find a guide, then choose how to listen</p><h1>Browse &amp; Listen</h1><p>Search all {len(functions)} function guides by title, current spoken cue, category, or purpose. Each recording retains its original release files.</p><p class="preparation-note">{_html(PREPARATION_FIRST_GUIDANCE)} <a href="../preparation-learning/">Open Preparation Learning</a></p></header><section class="library-section browse-library" id="library" aria-labelledby="library-title"><div class="section-heading"><div><p class="eyebrow">Published editions and all function guides</p><h2 id="library-title">Find a practice</h2></div><span class="count" id="release-count">{session_count} recordings</span></div><p>Function guides remain available independently of audio.</p><div class="library-tools"><label class="sr-only" for="search">Search title, ID, description, current spoken cue, category, or use</label><input id="search" type="search" placeholder="Search functions, cues, categories, or uses" aria-describedby="results-count"><label for="category-filter">Category <select id="category-filter"><option value="">All categories</option>{options}</select></label>{audio_filter}{language_filter}{voice_filter}<button id="clear-library-filters" type="button" hidden>Clear filters</button></div><section class="release-banner browse-banner" aria-labelledby="release-title"><div class="release-symbol" aria-hidden="true">↗</div><div><p class="eyebrow">Published audio</p><h2 id="release-title">{session_count} session editions are listed</h2><p id="release-description">Search by practice and category. Open a function guide to read, listen, or download its original edition.</p></div><a class="text-link" href="https://github.com/ocfproject-org/open-consciousness-functions-audio/releases">All releases <span aria-hidden="true">↗</span></a></section><p id="empty-state" class="empty-state" role="status" hidden>No published recordings are listed in the verified catalog; function guides remain available.</p><p id="results-count" role="status" aria-live="polite">Published editions and direct download links are listed below.</p><p id="catalog-no-results" class="filter-empty" hidden>No functions match these filters.</p><div class="selection-tools"><span id="selection-count" role="status" aria-live="polite" tabindex="-1">0 files selected</span><button id="download-selection" disabled>Save download list</button><button id="playlist-selection" disabled>Save MP3 playlist</button><details id="selected-files-review" hidden><summary id="selected-files-summary">Review selected files (0)</summary><ul id="selected-files-list"></ul><button id="clear-selection" type="button">Clear selected files</button></details><p>Downloads open the original release assets. Detailed filenames, versions, and checksums are on each function guide.</p></div><div id="catalog-results">{groups}</div><div id="release-extras"></div></section><noscript><p>Search and player controls need JavaScript. Function guides and individual download links remain available above.</p></noscript>'''
 
 
 def _unique_categories(functions):
@@ -1695,7 +1727,7 @@ def _session_card(row, transcript_paths, *, site_root_prefix="../../"):
         local = transcript_paths.get(asset["asset_id"])
         if fmt == "txt" and local:
             transcript_controls.append(
-                f'<details class="transcript" data-transcript><summary>{label} — edition {_html(session["edition"])} ({_html(session["locale"])})</summary><p class="transcript-status" data-transcript-status role="status" aria-live="polite" hidden></p><label class="transcript-search"><span>Search this transcript</span><input type="search" data-transcript-search disabled></label><pre class="transcript-body" data-transcript-src="{_html(site_root_prefix + local["path"])}" aria-live="off">Transcript loads when expanded.</pre><button type="button" data-transcript-retry hidden>Retry loading transcript</button><p><a href="{_html(site_root_prefix + local["path"])}" download aria-label="Download transcript text for {_html(title)}, edition {_html(session["edition"])}, {_html(session["locale"])}">Download transcript text</a> · <a href="{_html(asset["download_url"])}" aria-label="Original release asset, TXT for {_html(title)}, edition {_html(session["edition"])}, {_html(session["locale"])}">Original release asset</a></p><details class="file-details"><summary>Transcript file details</summary><p>SHA-256: <code>{_html(asset["sha256"])}</code></p></details></details>'
+                f'<details class="transcript" data-transcript><summary>{label} — edition {_html(session["edition"])} ({_html(session["locale"])})</summary><p class="transcript-status" data-transcript-status role="status" aria-live="polite" hidden></p><label class="transcript-search"><span>Search this transcript</span><input type="search" data-transcript-search disabled></label><pre class="transcript-body" data-transcript-src="{_html(site_root_prefix + local["path"])}" aria-live="off">Open the download link below to read this edition-matched transcript. With JavaScript enabled, it also loads here when expanded.</pre><button type="button" data-transcript-retry hidden>Retry loading transcript</button><p><a href="{_html(site_root_prefix + local["path"])}" download aria-label="Download transcript text for {_html(title)}, edition {_html(session["edition"])}, {_html(session["locale"])}">Download transcript text</a> · <a href="{_html(asset["download_url"])}" aria-label="Original release asset, TXT for {_html(title)}, edition {_html(session["edition"])}, {_html(session["locale"])}">Original release asset</a></p><details class="file-details"><summary>Transcript file details</summary><p>SHA-256: <code>{_html(asset["sha256"])}</code></p></details></details>'
             )
         elif local:
             transcript_controls.append(

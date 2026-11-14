@@ -301,7 +301,7 @@
     return card;
   }
   Promise.all([
-    fetch('../catalog.json').then(response => { if (!response.ok) throw new Error('Catalog unavailable'); return response.json(); }),
+    fetch('../browse-catalog.json').then(response => { if (!response.ok) throw new Error('Catalog unavailable'); return response.json(); }),
     fetch('../documentation-index.json').then(response => response.ok ? response.json() : {functions: []}).catch(() => ({functions: []})),
     fetch('../source.json').then(response => response.ok ? response.json() : {}).catch(() => ({}))
   ]).then(([catalog, documentationIndex, sourcePin]) => {
