@@ -284,7 +284,21 @@ test('mobile navigation stays readable, in-flow, keyboard-operable, and overflow
   await page.goto('/');
   for (const width of [160, 320, 360, 375, 390, 414, 760, 768, 820, 1024, 1280, 1440]) {
     await page.setViewportSize({ width, height: 900 });
-    expect(await page.evaluate(() => document.documentElement.scrollWidth), `horizontal overflow at ${width}px`).toBeLessThanOrEqual(width);
+    const viewportOverflow = await page.evaluate(() => ({
+      width: document.documentElement.scrollWidth,
+      nodes: [...document.querySelectorAll('body *')]
+        .map(element => ({
+          tag: element.tagName,
+          className: String(element.className || ''),
+          text: element.innerText?.slice(0, 60),
+          rect: (() => { const {left, right, width: elementWidth} = element.getBoundingClientRect(); return {left, right, width: elementWidth}; })(),
+          scrollWidth: element.scrollWidth,
+          clientWidth: element.clientWidth,
+        }))
+        .filter(element => element.rect.left < -1 || element.rect.right > innerWidth + 1 || element.scrollWidth > element.clientWidth + 1)
+        .slice(0, 12),
+    }));
+    expect(viewportOverflow.width, `horizontal overflow at ${width}px: ${JSON.stringify(viewportOverflow.nodes)}`).toBeLessThanOrEqual(width);
     const header = await page.locator('.site-header').evaluate(element => {
       const rect = element.getBoundingClientRect();
       return { left: rect.left, right: rect.right, width: rect.width, scrollWidth: element.scrollWidth, clientWidth: element.clientWidth };
