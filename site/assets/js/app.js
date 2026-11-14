@@ -140,7 +140,7 @@
       if (!saved || Date.now() - saved.savedAt > 30 * 60 * 1000) return;
       const item = items.find(candidate => candidate.id === saved.functionId && candidate.title === saved.title && candidate.locale === saved.locale && candidate.voiceId === saved.voiceId && candidate.edition === saved.edition);
       const index = item ? items.indexOf(item) : -1;
-      const player = index >= 0 ? catalogCards[index]?.querySelector('audio') : null;
+      const player = index >= 0 ? catalogCards[index]?.ocfEnsurePlayer?.() : null;
       if (!item || !player) return;
       if (saved.ended) player.dataset.ocfResumeEnded = 'true';
       else if (saved.positionIsExplicit === true && saved.position === 0) player.dataset.ocfResumePositionExplicit = 'true';
@@ -245,12 +245,20 @@
     card.append(el('p', item.assets.length ? 'Published recording available' : 'No recording in the verified catalog', 'function-status'));
     const mp3 = item.assets.find(a => a.format === 'mp3');
     if (mp3) {
+      const launch = el('button', 'Show player', 'show-player');
+      launch.type = 'button';
+      launch.setAttribute('aria-label', `Show player for ${item.title}, ${item.locale}, ${item.voice}, edition ${item.edition}`);
+      card.append(launch);
+      card.ocfEnsurePlayer = () => {
+        const existing = card.querySelector('audio');
+        if (existing) return existing;
       const player = el('audio'); player.controls = true; player.preload = 'none'; player.src = mp3.download_url;
       player.setAttribute('aria-label', `Listen to ${item.title}, ${item.locale}, ${item.voice}, edition ${item.edition}`);
       player.dataset.sessionTitle = item.title;
       player.dataset.sessionEdition = item.edition;
       player.dataset.sessionLocale = item.locale;
-      card.append(player);
+      launch.before(player);
+      launch.hidden = true;
       window.ocfRegisterMediaPlayer?.(player);
       ['play', 'pause', 'ended', 'waiting', 'playing', 'error'].forEach(event => player.addEventListener(event, render));
       player.addEventListener('play', () => {
@@ -273,6 +281,13 @@
         }
         savePlaybackState(item, player, {liveSeek});
         if (liveSeek) delete player.dataset.ocfLiveSeek;
+      });
+        player.tabIndex = 0;
+        return player;
+      };
+      launch.addEventListener('click', () => {
+        card.ocfEnsurePlayer().focus();
+        render();
       });
     }
     item.assets.forEach(asset => {

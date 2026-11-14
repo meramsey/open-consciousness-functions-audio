@@ -2,7 +2,7 @@
 
 **Audit:** `OCF_Website_UX_Accessibility_Audit_2026-11-13..txt` (362 lines), supplied for implementation on 2026-11-13. The supervisor confirms the companion evidence ZIP was supplied and independently inspected: exact Library reference `libfile_fde3_f-a72e6671c7ac8191a3e049bfb956e921_0ac91c1086208191b42021296d42efb8`, SHA-256 `42b0d8ab0e80c96df1f7adb471ae5ac5fa92a395dcfc29e4bc73554b292d8fbc`. The ZIP contains nine screenshots and four JSON baseline files about the local artifact. This session did not open the ZIP images; it separately rendered and inspected new local Playwright screenshots listed in checkpoint 3 below. Neither image set is deployed-site or physical-device evidence.
 
-**Audited inputs:** current audio main `55ac1be0cd3ecf5797f438ce816a7f805127ac40` (PR17 checkpoint 2 merged); original audit deployment `09293ca7e5003f13e959fcdc39e57acb091c7c98`; source main/pin `704440da8e0379cee8dfd332203bc0001c0a5f27`.
+**Current deployed baseline:** audio main `30856e0943eb8b0309655a2b12456b01c73ed5de` (PR20 checkpoint5 merged and live verified); original audit deployment `09293ca7e5003f13e959fcdc39e57acb091c7c98`; source main/pin `704440da8e0379cee8dfd332203bc0001c0a5f27`.
 
 **Checkpoint 1:** Draft PR [#16](https://github.com/ocfproject-org/open-consciousness-functions-audio/pull/16) merged at `655e23b81f186f0267ae2a5da19d2d7f230b77a1`. No deployment or live-domain verification is implied.
 
@@ -41,10 +41,10 @@ Continued the same PR16 worktree from exact clean head `4a886869f872f4ae816b04e6
 | 20 Onboarding/listening repetition | **Partially implemented in website presentation** | Listening Guide removes repeated project/setup blocks and links repeated FAQs to primary sections. Start Here and preparation-first wording remain unchanged; further presentation consolidation is limited to general guidance. |
 | 21 Relationships presentation | **Implemented; all 33 directional records verified** | Related-practice links are grouped by source category and show the source-approved reason. The UI explains one-way/optional status once; no reverse links, prerequisites, sequences or combined effects were added. |
 | 22 About introduction | **Implemented; reader-facing intro and technical disclosure** | About opens with project/library purpose, reading/listening/download choices, independence, release-specific availability and a report-issue link. Precise source/version details remain in native disclosure. |
-| 23 Runtime catalog dependence | **Partially implemented** | Homepage now uses build-time facts and has no catalog fetch or media controls. Browse & Listen still reads the verified catalog at runtime and then constructs the session players; `preload="none"` remains. Smaller browse payload/on-demand player creation and live performance measurement are not claimed here. |
-| 24 No-JavaScript/failure truthfulness | **Partially implemented; local fallback regression added** | Browse & Listen now emits static guide cards, build-verified availability and direct release links before enhancement; JavaScript-disabled and catalog-failure states retain the guide list and do not claim no audio. Broader network-failure/transcript behavior remains for checkpoint 5. |
-| 25 Canonical domain/legacy routes | **Deferred to checkpoint 5; live status unknown** | No DNS, TLS, redirect, CNAME or security-setting changes. Live behavior was not inferred from local artifact tests. |
-| 26 Test coverage | **Automated checkpoints 1–4 extended; manual/deployment tests deferred to checkpoint 5** | New tests cover reference content, semantic device checklists/text parity, transcript mobile/retry, About, no-JS/catalog failure, legacy routes, relationships, history distinction and retained playback/selection. |
+| 23 Runtime catalog dependence | **Partially implemented** | Homepage now uses build-time facts and has no catalog fetch or media controls. Browse & Listen still reads the verified catalog at runtime and then constructs the session players; `preload="none"` remains. PR20 reduces browser catalog883,358→233,795bytes while retaining full provenance catalog; on-demand player creation is under review in this follow-up. Field performance remains unmeasured. |
+| 24 No-JavaScript/failure truthfulness | **Implemented; no-JS/catalog-failure/transcript-retry regressions verified** | Browse & Listen now emits static guide cards, build-verified availability and direct release links before enhancement; JavaScript-disabled and catalog-failure states retain the guide list and do not claim no audio. Transcript interruption/retry and exact-edition fallback are tested; browser tests are not physical-device evidence. |
+| 25 Canonical domain/legacy routes | **Implemented and live verified in PR20** | Canonical/share metadata, sitemap and helpful nested404 verified live; HTTP→HTTPS, www→apex, slash and GitHub-project deep links preserve routes. No DNS/TLS/settings changes. |
+| 26 Test coverage | **Automated checkpoints 1–5 and deployment verified; physical-device/AT tests unverified** | New tests cover reference content, semantic device checklists/text parity, transcript mobile/retry, About, no-JS/catalog failure, legacy routes, relationships, history distinction and retained playback/selection. |
 
 ## Checkpoint 2: protect listening
 
@@ -63,8 +63,8 @@ Continued the same PR16 worktree from exact clean head `4a886869f872f4ae816b04e6
 1. **Restore usability (merged in PR16):** findings 01, 02, 03, 05 and contextual format names from 18.
 2. **Protect listening (merged in PR17):** findings 04 and applicable parts of 10, 18 and 26. Public-media playback was technically verified in Chromium/Firefox; WebKit’s inconclusive nonselection result and accessible fallback are recorded. No listening/device approval is inferred.
 3. **Consolidate experience (merged PR18):** findings 09–16 as applicable, 21, 23; preserve static pages, stable routes, source IDs and audio-release integrity.
-4. **Improve reference material (this draft):** findings 06, 07, 19, 20, 22 and inventory-derived availability from 08. Function instructions/cues/transcripts remain held for per-change owner review.
-5. **Deployment and quality:** remaining failure/network coverage from 24, all of 25, and field/lab performance plus real Android Chrome/iPhone Safari and assistive technology under 26. No DNS/security mutation without explicit authorization.
+4. **Improve reference material (merged PR19; live verified):** findings 06, 07, 19, 20, 22 and inventory-derived availability from 08. Function instructions/cues/transcripts remain held for per-change owner review.
+5. **Deployment and quality (merged PR20; live verified):** remaining failure/network coverage from 24, all of 25, and field/lab performance plus real Android Chrome/iPhone Safari and assistive technology under 26. No DNS/security mutation without explicit authorization.
 
 ## Checkpoint 3: consolidate experience
 
@@ -124,3 +124,10 @@ Browse now requests a233,795-byte presentation catalog instead of883,358-byte fu
 No-JavaScript browsing retains known published status, guides and direct download links; inert enhancement controls are hidden and transcript placeholders direct users to exact-edition text links. Legacy category queries are forwarded alongside function queries. Narrow print rows explicitly override mobile card layout.
 
 Build/site validation and193 offline Python tests passed; catalog26 and documentation13 JS assertions passed. Initial full Chromium32 passed/1 opt-in real-media skip; final post-review browser reruns are recorded in PR evidence. No physical device, native Safari, AT, field Core Web Vitals, human listening or new public-audio probe was performed. Function/cue/transcript review hold and all release files remain intact.
+
+
+## Lazy-player follow-up (under review)
+
+Existing OpenCode task was verified idle with empty inbox before this isolated website-only fallback. Browse creates no native players until Show player is activated, or one matching history bookmark is restored without autoplay. The idempotent factory retains the existing node/listeners for filters, seek, pause, ended/replay and repeated Back. File selection and all direct release links remain independent of player creation. No function text, transcript or audio changes. Reconnect reconciled the interrupted local build before resuming; no prompt was replayed.
+
+Follow-up validation: build/site validation,193 offline Python tests,26 catalog and13 documentation JS assertions pass. Chromium33 passes/1 opt-in public-media skip, including repeated Back, pending/zero seek, ended/replay, pinned focus, one active player, and new zero-initial/one-requested player identity/selection regression. Independent source review passed. Cross-browser final results and exact-head CI must pass before deployment.
