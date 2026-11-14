@@ -18,11 +18,15 @@ from build_public_site import (
     _downloads_page,
     _function_audio_actions,
     _function_page,
+    _functions_index,
+    _home_page,
     _historical_names_page,
     _inline,
     _historical_lookup_rows,
     _public_description,
+    _public_historical_name,
     _quick_reference,
+    _relationships_page,
     _recommended_settings,
     _shell,
     _request_public_asset,
@@ -125,7 +129,7 @@ class PublicSiteBuildTests(unittest.TestCase):
         page = _shell("Function list", "<p>Directory</p>", "functions", "a" * 40)
         for href in (
             "../start/", "../functions/", "../quick-reference/", "../listening/",
-            "../historical-names/", "../relationships/", "../index.html#library", "../downloads/", "../about/",
+            "../historical-names/", "../relationships/", "../functions/#library", "../downloads/", "../about/",
         ):
             self.assertIn(f'href="{href}"', page)
         self.assertIn('<a href="../functions/" aria-current="page">Browse &amp; Listen</a>', page)
@@ -284,12 +288,12 @@ class PublicSiteBuildTests(unittest.TestCase):
 
         function = {
             "function_id": "OCF-PRF-002",
-            "title": {"text": "Strong-Quick"},
+            "title": {"text": "Inner Power"},
             "commands": [{
                 "display_cue": {"text": "PLUS-INNER POWER"},
                 "spoken_cue": "Plus Inner Power",
             }],
-            "canonical_resource": "locales/en-US/OCF-PRF-002-Strong-Quick.yaml",
+            "canonical_resource": "locales/en-US/OCF-PRF-002-Inner-Power.yaml",
         }
         record = {
             "function_id": function["function_id"],
@@ -302,14 +306,9 @@ class PublicSiteBuildTests(unittest.TestCase):
         }
         raw_resource = yaml.safe_dump(record, sort_keys=True).encode()
         function["canonical_resource_sha256"] = hashlib.sha256(raw_resource).hexdigest()
-        other_function = {
-            "function_id": "OCF-BOD-004",
-            "title": {"text": "Detox"},
-            "commands": [{"display_cue": {"text": "PLUS-STRONG"}}],
-        }
         reference = (
             "# Historical lookup\n\n## Migrated vocabulary\n\n"
-            "- OCF-PRF-002 → Strong-Quick / `PLUS-INNER POWER`; "
+            "- OCF-PRF-002 → Inner Power / `PLUS-INNER POWER`; "
             "historical matches: PLUS-STRONG; pLuS   inner power.\n"
         )
         with tempfile.TemporaryDirectory() as directory:
@@ -317,13 +316,68 @@ class PublicSiteBuildTests(unittest.TestCase):
             resource = root / function["canonical_resource"]
             resource.parent.mkdir(parents=True)
             resource.write_bytes(raw_resource)
-            rows = _historical_lookup_rows(
-                reference, [function, other_function], root
-            )
+            rows = _historical_lookup_rows(reference, [function], root)
         self.assertEqual(
             [(name["text"], name["also_current"]) for name in rows[0]["names"]],
-            [("PLUS-STRONG", False), ("pLuS   inner power", True)],
+            [("pLuS   inner power", True)],
         )
+
+    def test_public_history_exclusion_is_exact_and_function_scoped(self):
+        self.assertFalse(_public_historical_name(
+            "OCF-PRF-002", {"kind": "former-primary", "text": "PLUS-STRONG"}
+        ))
+        for function_id, kind, text in (
+            ("OCF-PRF-006", "former-primary", "PLUS-STRONG"),
+            ("OCF-PRF-002", "former-teaching", "PLUS-STRONG"),
+            ("OCF-PRF-002", "former-primary", "PLUS-STRONG QUICK"),
+            ("OCF-PRF-002", "former-primary", "PLUS-STRONG-QUICK"),
+            ("OCF-PRF-002", "former-primary", "PLUS-INNER POWER"),
+        ):
+            with self.subTest(function_id=function_id, kind=kind, text=text):
+                self.assertTrue(_public_historical_name(
+                    function_id, {"kind": kind, "text": text}
+                ))
+
+    def test_relationship_directory_preserves_direction_and_reason_without_graph_claims(self):
+        functions = [
+            {
+                "function_id": "OCF-FND-004", "title": {"text": "Relax"},
+                "primary_category": "foundation", "related_functions": [{
+                    "function_id": "OCF-FND-002", "title": "Focus",
+                    "relationship_type": "complementary", "description": "An approved reason.",
+                }],
+            },
+            {
+                "function_id": "OCF-FND-002", "title": {"text": "Focus"},
+                "primary_category": "foundation", "related_functions": [],
+            },
+        ]
+        page = _relationships_page(functions)
+        self.assertEqual(page.count('class="relationship-card"'), 1)
+        self.assertIn('Relax</a> <span aria-hidden="true">→</span> <a href="../functions/OCF-FND-002/">Focus', page)
+        self.assertIn("An approved reason.", page)
+        self.assertIn("one-way", page)
+        self.assertNotIn("OCF-FND-002</a> <span aria-hidden", page)
+        self.assertNotIn("complementary", page)
+
+    def test_home_is_a_short_entry_page_and_browse_has_only_real_filters(self):
+        categories = [{"id": "focus", "label": "focus"}]
+        functions = [{
+            "function_id": "OCF-FND-002", "slug": "focus", "title": {"text": "Focus"},
+            "description": {"text": "A short approved description."}, "categories": categories,
+            "primary_category": "focus", "commands": [], "tags": [], "common_uses": [],
+        }]
+        self.assertIn("official Human Plus preparation track", _home_page(
+            functions, {"releases": [{"functions": [], "preparations": []}]}, "a" * 40
+        ))
+        self.assertIn('id="library"', _home_page(
+            functions, {"releases": [{"functions": [], "preparations": []}]}, "a" * 40
+        ))
+        page = _functions_index(functions, {"OCF-FND-002": []}, [])
+        self.assertIn("Browse &amp; Listen", page)
+        self.assertIn('id="category-filter"', page)
+        self.assertNotIn('id="language-filter"', page)
+        self.assertNotIn('id="voice-filter"', page)
 
     def test_draft_discovery_and_pending_procedure_are_hidden_without_mutating_metadata(self):
         function = {
@@ -382,6 +436,9 @@ class PublicSiteBuildTests(unittest.TestCase):
         self.assertNotIn("review-pending", html)
         self.assertNotIn("Title: reviewed", html)
         self.assertNotIn("Description: reviewed", html)
+        self.assertEqual(html.count("A documented purpose."), 1)
+        self.assertNotIn("Intended purpose", html)
+        self.assertIn('<details class="source-details">', html)
         self.assertEqual(function, original)
 
     def test_spoken_cue_reference_replaces_only_the_approved_whole_cue(self):

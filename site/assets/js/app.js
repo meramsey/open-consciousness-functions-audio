@@ -5,28 +5,48 @@
     try { const url = new URL(value); return url.protocol === 'https:' && !url.username && !url.password ? url.href : null; }
     catch (_) { return null; }
   };
-  const entries = (catalog, documentation = {}) => (catalog.releases || []).flatMap(release =>
+  const entries = (catalog, documentation = {}) => {
+    const items = (catalog.releases || []).flatMap(release =>
     [...(release.preparations || []), ...(release.functions || [])].flatMap(fn =>
       (fn.sessions || []).map(session => ({
         id: fn.function_id || 'preparation-learning', title: session.title || fn.title,
         description: documentation.byId?.[fn.function_id]?.description || fn.description || '',
         searchText: documentation.byId?.[fn.function_id]?.searchText || '',
-        href: fn.function_id ? `functions/${encodeURIComponent(fn.function_id)}/` : 'preparation-learning/',
+        category: documentation.byId?.[fn.function_id]?.category || 'preparation-learning',
+        categoryLabel: documentation.byId?.[fn.function_id]?.categoryLabel || 'Preparation Learning',
+        categories: documentation.byId?.[fn.function_id]?.categories || ['preparation-learning'],
+        href: fn.function_id ? `${encodeURIComponent(fn.function_id)}/` : '../preparation-learning/',
         locale: session.locale || session.language || '',
         voice: session.voice_name || session.voice_id || '', voiceId: session.voice_id || '',
         edition: session.edition || release.version, date: release.date,
         releaseURL: safeURL(release.release_url), assets: (session.assets || []).filter(a => safeURL(a.download_url))
       }))));
+    const documented = Object.entries(documentation.byId || {});
+    const available = new Set(items.map(item => item.id));
+    for (const [id, functionDoc] of documented) {
+      if (available.has(id)) continue;
+      items.push({
+        id, title: functionDoc.title, description: functionDoc.description,
+        searchText: functionDoc.searchText, category: functionDoc.category,
+        categoryLabel: functionDoc.categoryLabel,
+        categories: functionDoc.categories, href: `${encodeURIComponent(id)}/`,
+        locale: '', voice: '', voiceId: '', edition: '', releaseURL: null, assets: [],
+      });
+    }
+    return items;
+  };
   const normalizeSearch = value => String(value || '')
     .normalize('NFKC')
     .toLocaleLowerCase('en-US')
     .replace(/[\p{P}\p{S}]+/gu, ' ')
     .replace(/\s+/g, ' ')
     .trim();
-  const filterEntries = (items, query, locale, voice) => {
+  const filterEntries = (items, query, category, audio, locale, voice) => {
     const terms = normalizeSearch(query);
     return items.filter(item =>
       (!terms || normalizeSearch(`${item.id} ${item.title} ${item.description} ${item.searchText}`).includes(terms)) &&
+      (!category || (item.categories || []).includes(category)) &&
+      (!audio || (item.assets.length ? 'yes' : 'no') === audio) &&
       (!locale || item.locale === locale) && (!voice || item.voiceId === voice));
   };
   const downloadActionName = (action, format, item) =>
@@ -45,6 +65,8 @@
   const count = document.getElementById('release-count');
   const results = document.getElementById('catalog-results');
   const search = document.getElementById('search');
+  const category = document.getElementById('category-filter');
+  const audioFilter = document.getElementById('audio-filter');
   const locale = document.getElementById('language-filter');
   const voice = document.getElementById('voice-filter');
   const resultsCount = document.getElementById('results-count');
@@ -54,7 +76,7 @@
   const playbackStateKey = `ocf-library-playback:${location.pathname}`;
   const navigationEntry = performance.getEntriesByType?.('navigation')?.[0];
   const returningThroughHistory = navigationEntry?.type === 'back_forward';
-  const filterControls = [['search', search], ['locale', locale], ['voice', voice]].filter(([, control]) => control);
+  const filterControls = [['search', search], ['category', category], ['audio', audioFilter], ['locale', locale], ['voice', voice]].filter(([, control]) => control);
   const selection = new Map();
   const selectionCount = document.getElementById('selection-count');
   const selectedFilesReview = document.getElementById('selected-files-review');
@@ -143,7 +165,7 @@
     save('OCF-selection.m3u8', '#EXTM3U\n' + [...selection.values()].filter(a => a.format === 'mp3').map(a => a.download_url).join('\n') + '\n', 'audio/x-mpegurl');
   });
   function updateSelection() {
-    const visible = new Set(filterEntries(catalogItems, search.value, locale.value, voice.value));
+    const visible = new Set(filterEntries(catalogItems, search.value, category?.value || '', audioFilter?.value || '', locale?.value || '', voice?.value || ''));
     const hiddenCount = [...selection.values()].filter(file => !visible.has(file.sessionItem)).length;
     selectionCount.textContent = `${selection.size} ${selection.size === 1 ? 'file' : 'files'} selected${hiddenCount ? ` (${hiddenCount} hidden by filters)` : ''}`;
     document.getElementById('download-selection').disabled = selection.size === 0;
@@ -184,7 +206,7 @@
     selectionCount.focus();
   });
   function render() {
-    const visible = new Set(filterEntries(catalogItems, search.value, locale.value, voice.value));
+    const visible = new Set(filterEntries(catalogItems, search.value, category?.value || '', audioFilter?.value || '', locale?.value || '', voice?.value || ''));
     let pinned = 0;
     catalogItems.forEach((item, index) => {
       const card = catalogCards[index];
@@ -214,11 +236,13 @@
     card.dataset.functionId = item.id;
     const title = el('h3'); const page = el('a', item.title);
     page.href = item.href; title.append(page); card.append(title);
-    card.append(el('p', `${item.id} · ${item.locale} · ${item.voice} · v${item.edition}`, 'session-meta'));
-      const pinned = el('p', undefined, 'playback-status');
+    const metadata = [item.categoryLabel || item.category, item.id, item.locale, item.voice, item.edition && `v${item.edition}`].filter(Boolean).join(' · ');
+    card.append(el('p', metadata, 'session-meta'));
+    const pinned = el('p', undefined, 'playback-status');
     pinned.hidden = true; pinned.setAttribute('data-playback-status', ''); pinned.setAttribute('role', 'status'); pinned.setAttribute('aria-live', 'polite');
     card.append(pinned);
     if (item.description) card.append(el('p', item.description));
+    card.append(el('p', item.assets.length ? 'Published recording available' : 'No recording in the verified catalog', 'function-status'));
     const mp3 = item.assets.find(a => a.format === 'mp3');
     if (mp3) {
       const player = el('audio'); player.controls = true; player.preload = 'none'; player.src = mp3.download_url;
@@ -266,8 +290,10 @@
       const link = el('a', `Download ${format}`); link.href = asset.download_url;
       link.setAttribute('aria-label', downloadActionName('Download', format, item));
       row.append(label, link); card.append(row);
-      const detail = el('details'); detail.append(el('summary', `${asset.filename} — checksum and details`));
-      detail.append(el('code', asset.sha256));
+      const detail = el('details'); detail.append(el('summary', `${format} file details`));
+      const filename = el('p'); filename.append(document.createTextNode('Release filename: '), el('code', asset.filename));
+      const checksum = el('p'); checksum.append(document.createTextNode('SHA-256: '), el('code', asset.sha256));
+      detail.append(filename, checksum);
       const measurements = [asset.size_bytes ? `${(asset.size_bytes / 1048576).toFixed(1)} MiB` : '', asset.duration_seconds ? `${Math.floor(Math.round(asset.duration_seconds) / 60)}m ${Math.round(asset.duration_seconds) % 60}s` : '', asset.sample_rate_hz ? `${asset.sample_rate_hz} Hz` : ''].filter(Boolean);
       detail.append(el('p', measurements.join(' · '))); card.append(detail);
     });
@@ -275,15 +301,19 @@
     return card;
   }
   Promise.all([
-    fetch('catalog.json').then(response => { if (!response.ok) throw new Error('Catalog unavailable'); return response.json(); }),
-    fetch('documentation-index.json').then(response => response.ok ? response.json() : {functions: []}).catch(() => ({functions: []})),
-    fetch('source.json').then(response => response.ok ? response.json() : {}).catch(() => ({}))
+    fetch('../catalog.json').then(response => { if (!response.ok) throw new Error('Catalog unavailable'); return response.json(); }),
+    fetch('../documentation-index.json').then(response => response.ok ? response.json() : {functions: []}).catch(() => ({functions: []})),
+    fetch('../source.json').then(response => response.ok ? response.json() : {}).catch(() => ({}))
   ]).then(([catalog, documentationIndex, sourcePin]) => {
     if (!supportedCatalog(catalog)) throw new Error('Unsupported catalog');
     if (documentationIndex.source_commit !== sourcePin.source_commit) documentationIndex = {functions: []};
     const documentation = {
       byId: Object.fromEntries((documentationIndex.functions || []).map(row => [row.function_id, {
+        title: row.title,
         description: row.description,
+        category: row.primary_category,
+        categoryLabel: row.primary_category_label,
+        categories: row.categories,
         searchText: `${row.categories.join(' ')} ${row.cues.join(' ')} ${row.search_terms.join(' ')}`
       }]))
     };
@@ -299,18 +329,24 @@
       });
       extras.append(details);
     });
-    count.textContent = `${catalog.releases.length} ${catalog.releases.length === 1 ? 'release' : 'releases'}`;
-    status.hidden = items.length > 0;
-    if (items.length) {
-      document.getElementById('release-title').textContent = 'Published audio editions';
-      document.getElementById('release-description').textContent = 'Choose a session below. Previous editions remain available with their original files and checksums.';
-    }
-    [...new Set(items.map(i => i.locale))].sort().forEach(value => { const option = el('option', value); option.value = value; locale.append(option); });
-    const voices = new Map(items.map(i => [i.voiceId, i.voice]));
-    [...voices].sort().forEach(([value, name]) => { const option = el('option', name); option.value = value; voice.append(option); });
+    const audioItems = items.filter(item => item.assets.length);
+    count.textContent = `${audioItems.length} recordings`;
+    status.hidden = audioItems.length > 0;
+    if (!audioItems.length) status.textContent = 'No published recordings are listed in the verified catalog; function guides remain available.';
+    [...new Set(audioItems.map(i => i.locale).filter(Boolean))].sort().forEach(value => {
+      if (!locale) return;
+      const option = el('option', value); option.value = value; locale.append(option);
+    });
+    const voices = new Map(audioItems.filter(i => i.voiceId).map(i => [i.voiceId, i.voice]));
+    [...voices].sort((a, b) => a[1].localeCompare(b[1])).forEach(([value, name]) => {
+      if (!voice) return;
+      const option = el('option', name); option.value = value; voice.append(option);
+    });
     restoreFilterState();
-    const functionId = new URLSearchParams(location.search).get('function');
+    const params = new URLSearchParams(location.search);
+    const functionId = params.get('function');
     if (functionId) search.value = functionId;
+    if (params.get('category') && category) category.value = params.get('category');
     search.disabled = false;
     catalogItems = items;
     catalogCards = items.map(createSessionCard);
@@ -332,12 +368,16 @@
     clearFilters?.addEventListener('click', () => {
       filterControls.forEach(([, control]) => { control.value = ''; });
       pinnedItems.clear();
-      const url = new URL(location.href); url.searchParams.delete('function');
+      const url = new URL(location.href); url.searchParams.delete('function'); url.searchParams.delete('category');
       history.replaceState({}, '', url); saveFilterState(); render(); updateSelection(); search.focus();
     });
     render(); updateSelection();
   }).catch(() => {
-    count.textContent = 'Catalog unavailable'; status.hidden = false;
-    status.replaceChildren(el('h3', 'The catalog could not be loaded'), el('p', 'Please retry, or use the GitHub Releases link above.'));
+    count.textContent = 'Published audio details unavailable';
+    status.hidden = false;
+    status.textContent = 'Published audio details could not be loaded. The function guides and build-time direct download links remain available.';
+    document.querySelector('.library-tools')?.setAttribute('hidden', '');
+    document.querySelector('.selection-tools')?.setAttribute('hidden', '');
+    resultsCount.textContent = '';
   });
 })();

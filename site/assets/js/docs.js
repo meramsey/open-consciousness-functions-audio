@@ -38,6 +38,17 @@
   if (typeof module !== 'undefined') module.exports = {normalize, matches, safeTranscript, highlight};
   if (typeof document === 'undefined') return;
 
+  const legacyFunction = new URLSearchParams(location.search).get('function');
+  const pathParts = location.pathname.replace(/index\.html$/, '').split('/').filter(Boolean);
+  const atSiteRoot = pathParts.length <= 1 && !/(?:^|\/)(?:functions|start|listening|quick-reference|historical-names|relationships|downloads|about|preparation-learning)(?:\/|$)/.test(location.pathname);
+  if (legacyFunction && /^OCF-[A-Z]{3}-\d{3}$/.test(legacyFunction) && atSiteRoot) {
+    const destination = new URL('functions/', location.href);
+    destination.searchParams.set('function', legacyFunction);
+    destination.hash = location.hash;
+    location.replace(destination.href);
+    return;
+  }
+
   const managedPlayers = new Set();
   const startedPlayers = new WeakSet();
   const failedPlayers = new WeakSet();

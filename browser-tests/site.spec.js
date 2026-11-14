@@ -58,6 +58,11 @@ test('all 58 generated function pages expose spoken cues only and pass axe', asy
     expect(pageText).not.toContain('Draft metadata — not reviewed guidance');
     expect(pageText).not.toContain('description review status not recorded');
     expect(pageText).not.toContain('Procedure wording is not published while review is pending.');
+    await expect(page.locator('.function-intro .lead')).toHaveText(row.description);
+    await expect(page.locator('.function-intro .lead')).toHaveCount(1);
+    await expect(page.getByRole('heading', {name: 'Intended purpose', exact: true})).toHaveCount(0);
+    await expect(page.getByRole('heading', {name: 'Purpose', exact: true})).toHaveCount(0);
+      await expect(page.locator('.source-details')).toBeAttached();
     const blocks = page.locator('.command-block');
     for (const block of await blocks.all()) {
       const cue = block.locator('.spoken-cue strong');
@@ -133,8 +138,8 @@ test('Start Here renders the approved suggestion as an ordered list and presents
   await page.goto('/');
   const homeText = await page.locator('main').innerText();
   const hero = await page.locator('.docs-hero').innerText();
-  expect(hero).toContain('Complete Preparation Learning before using any OCF function.');
-  expect(hero).toContain('Only people who have already learned the official Human Plus preparation track may skip it.');
+  expect(homeText).toContain('Complete Preparation Learning before using any OCF function.');
+  expect(homeText).toContain('Only people who have already learned the official Human Plus preparation track may skip it.');
   expect(homeText).not.toContain('Michael');
   expect(homeText).not.toContain('not a verified official OCF policy');
   await expect(page.locator('.desktop-nav a').first()).toHaveAttribute('href', 'start/');
@@ -144,7 +149,7 @@ test('Start Here renders the approved suggestion as an ordered list and presents
   await expect(page.locator('.docs-hero .button-light')).toHaveAttribute('href', 'start/');
   await expect(page.locator('.docs-hero a[href="preparation-learning/"]')).toHaveCount(0);
   await expect(page.locator('.desktop-nav a[href="functions/"]')).toHaveCount(1);
-  const quickPath = page.locator('.path-card[href="quick-reference/"]');
+  const quickPath = page.locator('.home-utilities a[href="quick-reference/"]');
   await expect(quickPath).toContainText('current spoken cues');
   await expect(quickPath).not.toContainText('display/spoken');
 });
@@ -154,10 +159,10 @@ test('historical names appear only in their source-authoritative lookup page', a
   const receipt = await page.request.get('/site-build-receipt.json').then(response => response.json());
   await expect(page.locator('[data-historical-name-entry]')).toHaveCount(43);
   expect(receipt.historical_mapping_count).toBe(43);
-  expect(receipt.historical_name_count).toBe(95);
+  expect(receipt.historical_name_count).toBe(94);
   await expect(page.locator('[data-also-current="true"]')).toHaveCount(4);
   expect(receipt.historical_name_kind_counts).toEqual({
-    'former-primary': 25,
+    'former-primary': 24,
     'former-teaching': 34,
     'former-title': 34,
     'legacy-phrase': 2,
@@ -189,10 +194,10 @@ test('historical names appear only in their source-authoritative lookup page', a
   await expect(sleepCue).toHaveAttribute('data-historical-kind', 'former-primary');
   await expect(sleepCue).toHaveAttribute('data-also-current', 'true');
   await expect(sleepCue.locator('.historical-name-kind')).toHaveText('Former primary cue · Also current');
-  const strong = historicalRow('OCF-PRF-002', 'PLUS-STRONG');
-  await expect(strong).toHaveAttribute('data-historical-kind', 'former-primary');
-  await expect(strong).toHaveAttribute('data-also-current', 'false');
-  await expect(strong.locator('.historical-name-kind')).toHaveText('Former primary cue');
+  const innerPower = page.locator('[data-historical-name-entry][data-function-id="OCF-PRF-002"]');
+  await expect(innerPower).toContainText('Eight-Great');
+  await expect(innerPower).toContainText('Plus Eight Great');
+  await expect(innerPower).not.toContainText('PLUS-STRONG');
   await expect(page.locator('a[href*="OCF_HISTORICAL_LOOKUP_CURRENT.md"]')).toHaveAttribute('href', /704440da8e0379cee8dfd332203bc0001c0a5f27/);
   await expect(page.getByText('A match never selects an activation target.')).toBeVisible();
   const unmapped = page.locator('.page-intro');
@@ -213,6 +218,20 @@ test('historical names appear only in their source-authoritative lookup page', a
   await expect(page.locator('.spoken-cue strong')).toContainText('Plus Inner Power');
 });
 
+test('related-practice directory retains all approved one-way records and their reasons', async ({ page }) => {
+  await page.goto('/relationships/');
+  const receipt = await page.request.get('/site-build-receipt.json').then(response => response.json());
+  const rows = page.locator('.relationship-card');
+  await expect(rows).toHaveCount(33);
+  expect(receipt.approved_relationship_count).toBe(33);
+  for (const row of await rows.all()) {
+    await expect(row.locator('h3 a')).toHaveCount(2);
+    await expect(row.locator('h3')).toContainText('→');
+    await expect(row.locator('p').last()).not.toBeEmpty();
+  }
+  await expect(page.locator('.page-intro')).toContainText('optional and one-way');
+});
+
 test('Start Here leads the home paths while Preparation Learning stays available inside onboarding', async ({ page }) => {
   await page.goto('/');
   await expect(page.locator('.docs-hero .button-light')).toHaveAttribute('href', 'start/');
@@ -225,6 +244,40 @@ test('Start Here leads the home paths while Preparation Learning stays available
   await expect(page.locator('#main a[href="../preparation-learning/"]')).toBeVisible();
   await page.goto('/preparation-learning/');
   await expect(page.locator('.edition-card audio')).toBeVisible();
+});
+
+test('homepage stays concise, keeps the legacy library fragment, and sends old function queries to Browse & Listen', async ({ page }) => {
+  await page.goto('/');
+  await expect(page.locator('audio')).toHaveCount(0);
+  await expect(page.locator('script[src$="/assets/js/app.js"]')).toHaveCount(0);
+  await expect(page.locator('#library')).toBeVisible();
+  await expect(page.locator('.hero-actions a[href="functions/"]')).toContainText('Browse & Listen');
+  await expect(page.locator('.category-link').first()).toBeVisible();
+  await page.goto('/index.html#library');
+  await expect(page).toHaveURL(/\/index\.html#library$/);
+  await page.goto('/index.html?function=OCF-FND-004');
+  await page.waitForURL(/\/functions\/\?function=OCF-FND-004$/);
+  await expect(page.locator('#search')).toHaveValue('OCF-FND-004');
+  await expect(page.locator('.session-card:visible h3')).toContainText('Relax');
+});
+
+test('Browse & Listen stays truthful without JavaScript or when catalog loading fails', async ({ page, browser, context }) => {
+  const noScriptContext = await browser.newContext({javaScriptEnabled: false});
+  const noScriptPage = await noScriptContext.newPage();
+  await noScriptPage.goto('/functions/');
+  await expect(noScriptPage.locator('.function-card')).toHaveCount(58);
+  await expect(noScriptPage.locator('.function-card').first()).toContainText('Published recording available');
+  await expect(noScriptPage.locator('.function-card').first().locator('.browse-action[href^="https://github.com/"]')).toHaveCount(2);
+  await expect(noScriptPage.locator('audio')).toHaveCount(0);
+  await noScriptContext.close();
+
+  await context.route('**/catalog.json', route => route.abort());
+  await page.goto('/functions/');
+  await expect(page.locator('.function-card')).toHaveCount(58);
+  await expect(page.locator('#empty-state')).toContainText('could not be loaded');
+  await expect(page.locator('#empty-state')).not.toContainText('No published recordings');
+  await expect(page.locator('.function-card').first().locator('.browse-action[href^="https://github.com/"]')).toHaveCount(2);
+  await expect(page.locator('audio')).toHaveCount(0);
 });
 
 test('mobile navigation stays readable, in-flow, keyboard-operable, and overflow-free through zoom widths', async ({ page }) => {
@@ -391,7 +444,7 @@ test('manual and system theme combinations keep banner, hover and focus contrast
   for (const osTheme of ['light', 'dark']) {
     for (const preference of ['light', 'dark', 'system']) {
       await page.emulateMedia({ colorScheme: osTheme });
-      await page.goto('/');
+      await page.goto('/functions/');
       await page.evaluate(value => localStorage.setItem('ocf-theme', value), preference);
       await page.reload();
       const expected = preference === 'system' ? 'System' : preference[0].toUpperCase() + preference.slice(1);
@@ -420,7 +473,8 @@ test('manual and system theme combinations keep banner, hover and focus contrast
       const focusColors = await themeButton.evaluate(button => ({ ring: getComputedStyle(button).outlineColor, background: getComputedStyle(button).backgroundColor }));
       expect(contrast(focusColors.ring, focusColors.background), `${preference}/${osTheme} focus ring`).toBeGreaterThanOrEqual(3);
       await page.goto('/functions/OCF-BOD-001/');
-      const documentationLink = page.locator('.docs-content .source-link a').first();
+      await page.locator('.source-details summary').click();
+      const documentationLink = page.locator('.docs-content .source-details a').first();
       await documentationLink.hover();
       const documentationHover = await page.evaluate(link => ({
         foreground: getComputedStyle(link).color,
@@ -477,22 +531,32 @@ test('manual and system theme combinations keep banner, hover and focus contrast
 
 test('current-cue search normalizes separators, offers clear/no-results, and keeps historical labels out', async ({ page }) => {
   await page.goto('/functions/');
-  const search = page.locator('[data-function-search]');
+  const search = page.locator('#search');
   for (const query of ['PLUS-RELAX', '  Plus   Relax  ', 'plus—relax']) {
     await search.fill(query);
-    await expect(page.locator('[data-function-card]:visible')).toHaveCount(1);
-    await expect(page.locator('[data-function-card]:visible h2')).toContainText('Relax');
+    await expect(page.locator('.session-card:visible')).toHaveCount(1);
+    await expect(page.locator('.session-card:visible h3')).toContainText('Relax');
   }
   await search.fill('no-such-current-cue');
-  await expect(page.locator('[data-function-no-results]')).toBeVisible();
-  await expect(page.locator('[data-function-clear]')).toBeVisible();
-  await page.locator('[data-function-clear]').click();
+  await expect(page.locator('#catalog-no-results')).toBeVisible();
+  await expect(page.locator('#clear-library-filters')).toBeVisible();
+  await page.locator('#clear-library-filters').click();
   await expect(search).toHaveValue('');
-  await expect(page.locator('[data-function-card]:visible')).toHaveCount(58);
+  await expect(page.locator('.session-card:visible')).toHaveCount(59);
 
   await search.fill('PLUS-STRONG');
-  await expect(page.locator('[data-function-card][data-search*="inner power"]')).toBeHidden();
-  await expect(page.locator('[data-function-card]:visible h2')).toContainText('Strong-Quick');
+  await expect(page.locator('.session-card:visible')).toHaveCount(1);
+  await expect(page.locator('.session-card:visible h3')).toContainText('Strong-Quick');
+
+  const directory = await page.request.get('/documentation-index.json').then(response => response.json());
+  const relaxCategory = directory.functions.find(row => row.function_id === 'OCF-FND-004').categories[0];
+  await page.locator('#clear-library-filters').click();
+  await page.locator('#category-filter').selectOption(relaxCategory);
+  const categoryFunctionIds = directory.functions.filter(row => row.categories.includes(relaxCategory)).map(row => row.function_id);
+  const visibleFunctionIds = await page.locator('.session-card:visible').evaluateAll(cards => cards.map(card => card.dataset.functionId));
+  expect(visibleFunctionIds.length).toBeGreaterThan(0);
+  expect(visibleFunctionIds.every(id => categoryFunctionIds.includes(id))).toBe(true);
+  await expect(page.locator('.session-card[data-function-id="OCF-FND-004"]')).toBeVisible();
 
   await page.goto('/quick-reference/');
   const referenceSearch = page.locator('[data-reference-search]');
@@ -512,7 +576,7 @@ test('filtered-out synthetic media remains focused, understandable, seekable and
   const audioRequests = [];
   page.on('request', request => { if (/\.(?:mp3|flac)(?:$|[?#])/i.test(request.url())) audioRequests.push(request.url()); });
   await useSilentWavFixture(page);
-  await page.goto('/');
+  await page.goto('/functions/');
   const relax = page.locator('.session-card').filter({ has: page.getByRole('link', { name: 'Relax', exact: true }) });
   const player = relax.locator('audio');
   await expect(player).toBeAttached();
@@ -547,7 +611,7 @@ test('filtered-out synthetic media remains focused, understandable, seekable and
     input.value = 'OCF-BOD-001';
     input.dispatchEvent(new Event('input', { bubbles: true }));
   });
-  await expect(page.locator('#results-count')).toContainText('1 matching session edition');
+  await expect(page.locator('#results-count')).toContainText('1 matching');
   await expect(relax).toBeVisible();
   await expect(relax.locator('[data-filter-pinned]')).toContainText('Playing Relax');
   expect(await player.evaluate(audio => audio.isSameNode(document.querySelector('.session-card[data-function-id="OCF-FND-004"] audio')))).toBe(true);
@@ -597,15 +661,14 @@ test('filtered-out synthetic media remains focused, understandable, seekable and
   expect(await player.evaluate(audio => audio.isConnected && !audio.paused)).toBe(true);
   expect(audioRequests).toEqual([]);
 
-  await page.goto('/functions/');
-  const directorySearch = page.locator('[data-function-search]');
+  const directorySearch = page.locator('#search');
   await directorySearch.fill('PLUS-RELAX');
   await page.evaluate(() => window.scrollTo(0, 300));
   await page.getByRole('link', { name: 'Relax', exact: true }).click();
   await expect(page).toHaveURL(/\/functions\/OCF-FND-004\/$/);
   await page.goBack();
   await expect(directorySearch).toHaveValue('PLUS-RELAX');
-  await expect(page.locator('[data-function-card]:visible h2')).toContainText('Relax');
+  await expect(page.locator('.session-card:visible h3')).toContainText('Relax');
 });
 
 test('Back navigation preserves the same active synthetic player position and filter state', async ({ page }) => {
@@ -615,7 +678,7 @@ test('Back navigation preserves the same active synthetic player position and fi
     audioResponses.push({host: new URL(response.url()).hostname, status: response.status()});
   });
   await useSilentWavFixture(page);
-  await page.goto('/');
+  await page.goto('/functions/');
   const relax = page.locator('.session-card').filter({has: page.getByRole('link', {name: 'Relax', exact: true})});
   const player = relax.locator('audio');
   await player.evaluate(audio => audio.load());
@@ -646,7 +709,7 @@ test('Back navigation preserves the same active synthetic player position and fi
   await relax.getByRole('link', {name: 'Relax', exact: true}).click();
   await expect(page).toHaveURL(/\/functions\/OCF-FND-004\/$/);
   await page.goBack();
-  await expect(page).toHaveURL(/\/$/);
+  await expect(page).toHaveURL(/\/functions\/$/);
   const restoredPlayer = page.locator('.session-card[data-function-id="OCF-FND-004"] audio');
   await expect(restoredPlayer).toBeAttached();
   await expect(page.locator('#search')).toHaveValue('OCF-BOD-001');
@@ -663,7 +726,7 @@ test('Back navigation preserves the same active synthetic player position and fi
   await relax.getByRole('link', {name: 'Relax', exact: true}).click();
   await expect(page).toHaveURL(/\/functions\/OCF-FND-004\/$/);
   await page.goBack();
-  await expect(page).toHaveURL(/\/$/);
+  await expect(page).toHaveURL(/\/functions\/$/);
   const secondRestorePlayer = page.locator('.session-card[data-function-id="OCF-FND-004"] audio');
   await expect(secondRestorePlayer).toBeAttached();
   await expect(page.locator('#search')).toHaveValue('OCF-BOD-001');
@@ -700,14 +763,14 @@ test('Back navigation preserves the same active synthetic player position and fi
 
   await secondRestorePlayer.evaluate(audio => { audio.currentTime = 0; });
   await expect.poll(() => page.evaluate(() => {
-    const saved = JSON.parse(sessionStorage.getItem('ocf-library-playback:/') || 'null');
+    const saved = JSON.parse(sessionStorage.getItem('ocf-library-playback:/functions/') || 'null');
     return saved?.position === 0 && saved.positionIsExplicit === true;
   })).toBe(true);
   await expect.poll(() => secondRestorePlayer.evaluate(audio => audio.currentTime)).toBe(0);
   await relax.getByRole('link', {name: 'Relax', exact: true}).click();
   await expect(page).toHaveURL(/\/functions\/OCF-FND-004\/$/);
   await page.goBack();
-  await expect(page).toHaveURL(/\/$/);
+  await expect(page).toHaveURL(/\/functions\/$/);
   let zeroPositionPlayer = page.locator('.session-card[data-function-id="OCF-FND-004"] audio');
   await expect(zeroPositionPlayer).toBeAttached();
   await expect.poll(() => zeroPositionPlayer.getAttribute('data-ocf-resume-position-explicit')).toBe('true');
@@ -716,7 +779,7 @@ test('Back navigation preserves the same active synthetic player position and fi
   await expect(page.locator('.session-card[data-function-id="OCF-FND-004"] [data-playback-status]')).toContainText('Paused at 0:00');
   await relax.getByRole('link', {name: 'Relax', exact: true}).click();
   await page.goBack();
-  await expect(page).toHaveURL(/\/$/);
+  await expect(page).toHaveURL(/\/functions\/$/);
   zeroPositionPlayer = page.locator('.session-card[data-function-id="OCF-FND-004"] audio');
   await expect(zeroPositionPlayer).toBeAttached();
   expect(await zeroPositionPlayer.evaluate(audio => audio.paused && audio.currentTime === 0)).toBe(true);
@@ -749,7 +812,7 @@ test('Back navigation preserves the same active synthetic player position and fi
   await relax.getByRole('link', {name: 'Relax', exact: true}).click();
   await expect(page).toHaveURL(/\/functions\/OCF-FND-004\/$/);
   await page.goBack();
-  await expect(page).toHaveURL(/\/$/);
+  await expect(page).toHaveURL(/\/functions\/$/);
   const endedPlayer = page.locator('.session-card[data-function-id="OCF-FND-004"] audio');
   await expect(endedPlayer).toBeAttached();
   await expect(page.locator('#search')).toHaveValue('OCF-BOD-001');
@@ -782,13 +845,13 @@ test('Back navigation preserves the same active synthetic player position and fi
   await expect.poll(() => endedPlayer.evaluate(audio => audio.ended), {timeout: 5000}).toBe(true);
   await endedPlayer.evaluate(audio => { audio.currentTime = 1.25; });
   await expect.poll(() => page.evaluate(() => {
-    const saved = JSON.parse(sessionStorage.getItem('ocf-library-playback:/') || 'null');
+    const saved = JSON.parse(sessionStorage.getItem('ocf-library-playback:/functions/') || 'null');
     return saved?.ended === false && saved?.positionIsExplicit === true && saved.position > 1;
   })).toBe(true);
   await relax.getByRole('link', {name: 'Relax', exact: true}).click();
   await expect(page).toHaveURL(/\/functions\/OCF-FND-004\/$/);
   await page.goBack();
-  await expect(page).toHaveURL(/\/$/);
+  await expect(page).toHaveURL(/\/functions\/$/);
   let soughtAfterEndPlayer = page.locator('.session-card[data-function-id="OCF-FND-004"] audio');
   await expect(soughtAfterEndPlayer).toBeAttached();
   await expect.poll(() => soughtAfterEndPlayer.getAttribute('data-ocf-resume-position')).toBe('1.25');
@@ -806,10 +869,14 @@ test('Back navigation preserves the same active synthetic player position and fi
 });
 
 test('catalog selection and download controls identify session and format', async ({ page }) => {
-  await page.goto('/');
+  await page.goto('/functions/');
   for (const title of ['Relax', 'Brain Flow']) {
     const card = page.locator('.session-card').filter({ has: page.getByRole('link', { name: title, exact: true }) });
     await expect(card).toBeVisible();
+    await expect(card.locator('.function-status')).toHaveText('Published recording available');
+    for (const summary of await card.locator('details summary').allTextContents()) {
+      expect(summary).toMatch(/^(?:MP3|FLAC) file details$/);
+    }
     for (const format of ['MP3', 'FLAC']) {
       const checkboxName = new RegExp(`^Select ${format} for ${title}, en-US, Mike — Original Voice, edition 0\\.1\\.0$`);
       await expect(card.getByRole('checkbox', { name: checkboxName })).toBeAttached();
@@ -822,7 +889,7 @@ test('catalog keeps one synthetic player active and announces a controlled media
   const audioRequests = [];
   page.on('request', request => { if (/\.(?:mp3|flac)(?:$|[?#])/i.test(request.url())) audioRequests.push(request.url()); });
   await useSilentWavFixture(page);
-  await page.goto('/');
+  await page.goto('/functions/');
   const relax = page.locator('.session-card').filter({ has: page.getByRole('link', { name: 'Relax', exact: true }) });
   const brain = page.locator('.session-card').filter({ has: page.getByRole('link', { name: 'Brain Flow', exact: true }) });
   const relaxPlayer = relax.locator('audio');
@@ -876,7 +943,7 @@ test('catalog keeps one synthetic player active and announces a controlled media
 });
 
 test('selected files hidden by filters remain reviewable and removable', async ({ page }) => {
-  await page.goto('/');
+  await page.goto('/functions/');
   const relax = page.locator('.session-card').filter({ has: page.getByRole('link', { name: 'Relax', exact: true }) });
   const brain = page.locator('.session-card').filter({ has: page.getByRole('link', { name: 'Brain Flow', exact: true }) });
   const catalog = await page.request.get('/catalog.json').then(response => response.json());
@@ -894,7 +961,9 @@ test('selected files hidden by filters remain reviewable and removable', async (
   await page.locator('#search').fill('OCF-BOD-001');
   await expect(relax).toBeHidden();
   await expect(page.locator('#selection-count')).toHaveText('2 files selected (1 hidden by filters)');
-  await review.locator('summary').click();
+  await review.locator(':scope > summary').focus();
+  await page.keyboard.press('Enter');
+  await expect(review).toHaveAttribute('open', '');
   await expect(review.locator('#selected-files-summary')).toContainText('1 hidden by filters');
   await expect(review).toContainText('Relax, en-US, Mike — Original Voice, edition 0.1.0 — MP3 (hidden by filters)');
   await expect(review.getByRole('link', { name: 'Open MP3 download for Relax, en-US, edition 0.1.0' })).toHaveAttribute('href', relaxAssetURL);
@@ -1159,7 +1228,7 @@ test('generated listening and all platform guides require stereo for binaural de
   expect(receipt.published_releases[0].publication_manifest_sha256).toBe('48cb39bcc3dfd7f7e211b3093cd927c3a790cd9ad28d6b47faad956014c85c14');
   await page.goto('/historical-names/');
   await expect(page.locator('[data-historical-name-entry]')).toHaveCount(43);
-  expect(receipt.historical_name_count).toBe(95);
+  expect(receipt.historical_name_count).toBe(94);
   await noAxeViolations(page);
 });
 
@@ -1189,7 +1258,8 @@ test('release downloads stay direct and mobile users get a truthful copy-and-ren
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(320);
   expect(await row.evaluate(element => element.scrollWidth <= element.clientWidth)).toBe(true);
 
-  const suggested = await row.locator('.download-name-note code').textContent();
+  await row.locator('.file-details summary').click();
+  const suggested = await row.locator('.file-details code').nth(1).textContent();
   expect(suggested).toContain('OCF-FND-004');
   expect(suggested).toContain('Relax');
   expect(suggested).toContain(session.locale);
@@ -1202,9 +1272,9 @@ test('release downloads stay direct and mobile users get a truthful copy-and-ren
   const link = row.locator('a.download-link');
   await expect(link).toHaveAttribute('href', mp3.download_url);
   await expect(link).toHaveAttribute('download', suggested);
-  await expect(row).toContainText('rename the downloaded file locally');
-  await expect(row).toContainText('not buffered by this page');
-  const copy = row.getByRole('button', { name: `Copy name: ${suggested}` });
+  await expect(page.locator('main')).toContainText('rename it locally if needed');
+  await expect(page.locator('main')).toContainText('does not buffer audio');
+  const copy = row.getByRole('button', { name: 'Copy suggested filename for MP3' });
   await expect(copy).toBeVisible();
   await expect(copy).toHaveAttribute('data-copy', suggested);
   if (browserName === 'chromium') {
@@ -1316,7 +1386,7 @@ test('Quick Reference filters, keyboard controls, narrow widths, print, themes, 
 
   await page.goto('/functions/OCF-FND-004/');
   const transcript = page.locator('[data-transcript]').first();
-  await transcript.locator('summary').click();
+  await transcript.locator(':scope > summary').click();
   await expect(transcript.locator('.transcript-body')).not.toContainText('Transcript loads when expanded.');
   await expect(transcript.locator('.transcript-search input')).toBeEnabled();
   const transcriptHeight = await transcript.locator('.transcript-body').evaluate(el => el.scrollHeight);

@@ -8,12 +8,12 @@ const catalog = {releases: [{version:'1.0', date:'2026-01-01', release_url:'http
 const rows = entries(catalog);
 assert.strictEqual(rows.length, 2);
 assert.strictEqual(rows[0].id, 'preparation-learning');
-assert.strictEqual(filterEntries(rows, 'EXAMPLE', 'en-US', 'voice-a').length, 1);
+assert.strictEqual(filterEntries(rows, 'EXAMPLE', '', '', 'en-US', 'voice-a').length, 1);
 assert.equal(normalizeSearch('  ＰＬＵＳ---RELAX  '), 'plus relax');
-assert.strictEqual(filterEntries([{...rows[0], title: 'Relax', searchText: 'Plus Relax'}], ' Plus   Relax ', '', '').length, 1);
-assert.strictEqual(filterEntries([{...rows[0], title: 'Relax', searchText: 'Plus Relax'}], 'PLUS-RELAX', '', '').length, 1);
-assert.strictEqual(filterEntries(rows, '', 'fr-FR', '').length, 0);
-assert.strictEqual(filterEntries(rows, 'OCF-FND-001', '', '').length, 1);
+assert.strictEqual(filterEntries([{...rows[0], title: 'Relax', searchText: 'Plus Relax'}], ' Plus   Relax ', '', '', '', '').length, 1);
+assert.strictEqual(filterEntries([{...rows[0], title: 'Relax', searchText: 'Plus Relax'}], 'PLUS-RELAX', '', '', '', '').length, 1);
+assert.strictEqual(filterEntries(rows, '', '', '', 'fr-FR', '').length, 0);
+assert.strictEqual(filterEntries(rows, 'OCF-FND-001', '', '', '', '').length, 1);
 assert(downloadList([asset]).includes(asset.sha256));
 assert(downloadList([asset]).includes(asset.download_url));
 assert(supportedCatalog({schema_version: 3, releases: []}));
@@ -28,5 +28,13 @@ for (const title of ['Relax', 'Brain Flow']) {
 }
 const currentStrongQuick = {id: 'OCF-PRF-006', title: 'Strong-Quick', description: '', searchText: 'Plus Strong Quick'};
 const currentInnerPower = {id: 'OCF-PRF-002', title: 'Inner Power', description: '', searchText: 'Plus Inner Power'};
-assert.deepEqual(filterEntries([currentStrongQuick, currentInnerPower], 'PLUS-STRONG', '', '').map(x => x.id), ['OCF-PRF-006']);
-console.log('Catalog logic: 22 assertions passed');
+assert.deepEqual(filterEntries([currentStrongQuick, currentInnerPower], 'PLUS-STRONG', '', '', '', '').map(x => x.id), ['OCF-PRF-006']);
+assert.deepEqual(filterEntries([{...rows[0], categories: ['focus']}], '', 'focus', '', '', '').length, 1);
+assert.deepEqual(filterEntries([{...rows[0], assets: []}], '', '', 'no', '', '').length, 1);
+const completeDirectory = entries(catalog, {byId: {
+  'OCF-FND-001': {title: 'Example', description: 'Guide', searchText: 'focus cue', category: 'focus', categories: ['focus']},
+  'OCF-FND-002': {title: 'Guide only', description: 'No recording', searchText: '', category: 'body', categories: ['body']},
+}});
+assert.strictEqual(completeDirectory.length, 3);
+assert.deepEqual(filterEntries(completeDirectory, '', 'body', 'no', '', '').map(item => item.id), ['OCF-FND-002']);
+console.log('Catalog logic: 26 assertions passed');
