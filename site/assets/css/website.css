@@ -335,7 +335,7 @@
   .quick-reference-table { display: table; }
   .quick-reference-table thead { position: static; width: auto; height: auto; padding: 0; margin: 0; overflow: visible; clip: auto; clip-path: none; white-space: normal; border: 0; }
   .quick-reference-table tbody { display: table-row-group; }
-  .quick-reference-table tbody tr { display: table-row; padding: 0; border: 0; }
+  .quick-reference-table tbody tr[data-reference-row] { display: table-row; padding: 0; border: 0; }
   .quick-reference-table tbody th[scope="row"], .quick-reference-table tbody td { display: table-cell; }
   .quick-reference-table tbody td::before { display: none; }
   .function-grid, .relationship-grid, .path-grid { display: block; }

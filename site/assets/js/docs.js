@@ -38,12 +38,15 @@
   if (typeof module !== 'undefined') module.exports = {normalize, matches, safeTranscript, highlight};
   if (typeof document === 'undefined') return;
 
-  const legacyFunction = new URLSearchParams(location.search).get('function');
+  const legacyParams = new URLSearchParams(location.search);
+  const legacyFunction = legacyParams.get('function');
+  const legacyCategory = legacyParams.get('category');
   const pathParts = location.pathname.replace(/index\.html$/, '').split('/').filter(Boolean);
   const atSiteRoot = pathParts.length <= 1 && !/(?:^|\/)(?:functions|start|listening|quick-reference|historical-names|relationships|downloads|about|preparation-learning)(?:\/|$)/.test(location.pathname);
-  if (legacyFunction && /^OCF-[A-Z]{3}-\d{3}$/.test(legacyFunction) && atSiteRoot) {
+  if (atSiteRoot && ((legacyFunction && /^OCF-[A-Z]{3}-\d{3}$/.test(legacyFunction)) || (legacyCategory && /^[a-z][a-z-]*$/.test(legacyCategory)))) {
     const destination = new URL('functions/', location.href);
-    destination.searchParams.set('function', legacyFunction);
+    if (legacyFunction) destination.searchParams.set('function', legacyFunction);
+    if (legacyCategory) destination.searchParams.set('category', legacyCategory);
     destination.hash = location.hash;
     location.replace(destination.href);
     return;
