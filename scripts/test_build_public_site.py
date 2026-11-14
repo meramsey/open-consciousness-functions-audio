@@ -26,6 +26,7 @@ from build_public_site import (
     _historical_lookup_rows,
     _public_description,
     _public_historical_name,
+    _renamed_title_rows,
     _quick_reference,
     _relationships_page,
     _recommended_settings,
@@ -278,11 +279,11 @@ class PublicSiteBuildTests(unittest.TestCase):
                 historical_reference_sha256="b" * 64,
             )
             self.assertIn('data-historical-kind="former-title"', page)
-            self.assertIn("Former title", page)
-            self.assertIn('data-also-current="true"', page)
-            self.assertIn("Former primary cue · Also current", page)
-            self.assertIn("mappings for 1 functions and 2 historical strings", page)
-            self.assertIn("Absence from this reference does not establish", page)
+            self.assertIn("Earlier title:", page)
+            self.assertNotIn("PLUS-SMELL MORE", page)
+            self.assertNotIn("Also current", page)
+            self.assertNotIn("historical strings", page)
+            self.assertNotIn("SHA-256", page)
         wrong_title = reference.replace("→ Smell /", "→ Taste /")
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
@@ -299,6 +300,38 @@ class PublicSiteBuildTests(unittest.TestCase):
             resource.write_bytes(raw_resource)
             with self.assertRaisesRegex(ValueError, "unknown function"):
                 _historical_lookup_rows(unknown_target, [function], root)
+
+    def test_title_map_hides_unchanged_titles_and_cue_only_history_without_mutation(self):
+        rows = [
+            {"function_id": "OCF-SLP-005", "title": "Sleep Easy", "names": [
+                {"kind": "former-title", "text": "sleep-easy"},
+                {"kind": "former-primary", "text": "PLUS-SLEEP EASY"}]},
+            {"function_id": "OCF-BOD-002", "title": "Circulation", "names": [
+                {"kind": "former-primary", "text": "PLUS-FLOW SMOOTH"}]},
+            {"function_id": "OCF-PRF-002", "title": "Inner Power", "names": [
+                {"kind": "former-title", "text": "Eight-Great"},
+                {"kind": "former-title", "text": "Eight-Great"},
+                {"kind": "former-teaching", "text": "Plus Eight Great"}]},
+        ]
+        original = copy.deepcopy(rows)
+        visible = _renamed_title_rows(rows)
+        self.assertEqual(rows, original)
+        self.assertEqual([row["function_id"] for row in visible], ["OCF-PRF-002"])
+        self.assertEqual(visible[0]["names"], [{"kind": "former-title", "text": "Eight-Great"}])
+
+    def test_home_optional_starter_links_use_verified_current_ids_in_order(self):
+        ids = ("OCF-FND-004", "OCF-FND-002", "OCF-COG-004", "OCF-COG-006", "OCF-COG-007")
+        titles = ("Relax", "Focus", "Imprint", "Recall", "Think Fast")
+        functions = [{"function_id": fid, "title": {"text": title}, "categories": []}
+                     for fid, title in zip(ids, titles)]
+        page = _home_page(functions, {"releases": []}, "a" * 40)
+        locations = [page.index(f'href="functions/{fid}/"') for fid in ids]
+        self.assertEqual(locations, sorted(locations))
+        for title in titles:
+            self.assertIn(f'>{title}</a></li>', page)
+        self.assertIn("optional starting choices—not additional prerequisites", page)
+        self.assertLess(page.index("Complete Preparation Learning"), locations[0])
+        self.assertIn("official Human Plus preparation track", page)
 
     def test_historical_overlap_is_exact_normalized_and_same_function_only(self):
         import yaml

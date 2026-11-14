@@ -1234,7 +1234,7 @@ def _home_page(functions, catalog, source_commit):
     starting = {row["function_id"]: row for row in functions}
     starting_links = "".join(
         f'<li><a href="functions/{fid}/">{_html(starting[fid]["title"]["text"])}</a></li>'
-        for fid in ("OCF-FND-004", "OCF-FND-002", "OCF-COG-007")
+        for fid in ("OCF-FND-004", "OCF-FND-002", "OCF-COG-004", "OCF-COG-006", "OCF-COG-007")
         if fid in starting
     )
     session_count = sum(
@@ -1851,43 +1851,42 @@ def _quick_reference(functions, sessions_by_function):
     return f"""<header class="page-intro"><p class="eyebrow">Approved spoken cues</p><h1>Quick Reference</h1><p>Find a spoken cue; use the function's documented steps rather than inferring a procedure from its name.</p></header><div class="reference-tools"><label for="reference-search">Search title, ID, spoken cue or description</label><input id="reference-search" type="search" data-reference-search><label for="reference-category">Category</label><select id="reference-category" data-reference-category><option value="">All categories</option>{options}</select><output data-reference-count aria-live="polite">58 functions</output><button type="button" data-reference-clear hidden>Clear filters</button><p class="filter-empty" data-reference-no-results role="status" hidden>No functions match these filters.</p></div><div class="table-scroll"><table role="table" class="reference-table quick-reference-table" aria-label="Current cues, function descriptions, and audio availability"><thead role="rowgroup"><tr role="row"><th role="columnheader" scope="col">Function</th><th role="columnheader" scope="col">Current spoken cues</th><th role="columnheader" scope="col">Description</th><th role="columnheader" scope="col">Audio availability</th></tr></thead><tbody role="rowgroup">{"".join(rows)}</tbody></table></div>"""
 
 
+def _renamed_title_rows(rows):
+    """Public title map only; keep the complete typed source history intact."""
+    def title_form(text):
+        return "".join(char for char in unicodedata.normalize("NFKC", text).casefold() if char.isalnum())
+
+    visible = []
+    for row in rows:
+        names = []
+        seen = {title_form(row["title"])}
+        for name in row["names"]:
+            normalized = title_form(name["text"])
+            if name["kind"] == "former-title" and normalized not in seen:
+                names.append(name)
+                seen.add(normalized)
+        if names:
+            visible.append({**row, "names": names})
+    return visible
+
+
 def _historical_names_page(
     rows, functions, source_commit, *, historical_reference_sha256
 ):
     entries = "".join(
-        f'''<article class="historical-name-entry" data-historical-name-entry data-function-id="{_html(row["function_id"])}"><h2><a href="../functions/{_html(row["function_id"])}/">{_html(row["title"])}</a> <span class="stable-id">{_html(row["function_id"])}</span></h2><ul>{"".join(f'<li data-historical-kind="{_html(name["kind"])}" data-also-current="{str(name["also_current"]).lower()}"><span class="historical-name-kind">{_html(name["label"])}</span> <span class="historical-name-text">{_html(name["text"])}</span></li>' for name in row["names"])}</ul></article>'''
-        for row in rows
+        f'''<article class="historical-name-entry" data-historical-name-entry data-function-id="{_html(row["function_id"])}"><h2><a href="../functions/{_html(row["function_id"])}/">{_html(row["title"])}</a></h2><ul>{"".join(f'<li data-historical-kind="former-title"><span class="historical-name-kind">Earlier title:</span> <span class="historical-name-text">{_html(name["text"])}</span></li>' for name in row["names"])}</ul></article>'''
+        for row in _renamed_title_rows(rows)
     )
     source_url = (
         f"{SOURCE_REPOSITORY}/blob/{source_commit}/"
         "docs/releases/OCF_HISTORICAL_LOOKUP_CURRENT.md"
     )
-    mapped_ids = {row["function_id"] for row in rows}
-    unmapped = [
-        function
-        for function in functions
-        if function["function_id"] not in mapped_ids
-    ]
-    unmapped_items = "".join(
-        f'<li><a href="../functions/{_html(function["function_id"])}/">{_html(function["title"]["text"])}</a> <span class="stable-id">{_html(function["function_id"])}</span></li>'
-        for function in unmapped
-    )
     return (
-        '<header class="page-intro"><p class="eyebrow">Historical lookup only</p>'
-        '<h1>Historical names</h1><p>These are only the historical matches listed in '
-        'the pinned OCF reference. Each type label comes from the canonical '
-        'historical_lookup.kind field; types are not inferred from the spelling. '
-        '“Also current” marks an exact case/whitespace-normalized match to this '
-        'same function’s current title, active display cue, or active spoken cue; '
-        'the source historical classification remains unchanged. '
-        'They are for lookup; a match never selects an activation target. Use the '
-        'current function guide for current instructions.</p>'
-        f'<p>The pinned reference contains mappings for {len(rows)} functions and '
-        f'{sum(len(row["names"]) for row in rows)} historical strings. It has no '
-        f'mapping for these {len(unmapped)} functions:</p><ul>{unmapped_items}</ul>'
-        '<p>Absence from this reference does not establish that no historical '
-        'counterpart exists.</p>'
-        f'<p class="source-link">Source: <a href="{_html(source_url)}">OCF historical lookup at pinned commit {source_commit[:12]}</a> · SHA-256 <code>{historical_reference_sha256}</code></p></header>'
+        '<header class="page-intro"><p class="eyebrow">Find a renamed function</p>'
+        '<h1>Historical names</h1><p>Earlier titles are listed below their current '
+        'OCF names. Follow a link for the current function guide. Unchanged names '
+        'and cue history are not included here.</p>'
+        f'<p class="source-link"><a href="{_html(source_url)}">Historical name reference</a></p></header>'
         f'<div class="historical-name-grid">{entries}</div>'
     )
 
