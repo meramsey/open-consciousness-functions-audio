@@ -154,68 +154,74 @@ test('Start Here renders the approved suggestion as an ordered list and presents
   await expect(quickPath).not.toContainText('display/spoken');
 });
 
-test('historical names appear only in their source-authoritative lookup page', async ({ page }) => {
+test('historical title map hides cue history, unchanged names and unmapped lists', async ({ page }) => {
   await page.goto('/historical-names/');
   const receipt = await page.request.get('/site-build-receipt.json').then(response => response.json());
-  await expect(page.locator('[data-historical-name-entry]')).toHaveCount(43);
+  // Complete source provenance stays intact; the public map is a title-only projection.
   expect(receipt.historical_mapping_count).toBe(43);
   expect(receipt.historical_name_count).toBe(94);
-  await expect(page.locator('[data-also-current="true"]')).toHaveCount(4);
   expect(receipt.historical_name_kind_counts).toEqual({
-    'former-primary': 24,
-    'former-teaching': 34,
-    'former-title': 34,
-    'legacy-phrase': 2,
+    'former-primary': 24, 'former-teaching': 34, 'former-title': 34, 'legacy-phrase': 2,
   });
-  const smell = page.locator('[data-historical-name-entry][data-function-id="OCF-SEN-003"]');
-  await expect(smell).toContainText('Sensory: Smell');
-  await expect(smell.locator('[data-historical-kind="former-title"]')).toContainText('Former title');
-  await expect(smell).not.toContainText('PLUS-SMELL GREATER');
-  await expect(smell).not.toContainText('PLUS-SMELL LESSER');
-  await expect(page.locator('[data-historical-name-entry][data-function-id="OCF-SEN-005"]')).not.toContainText('PLUS-TOUCH MORE');
-  const historicalRow = (functionId, text) => page
-    .locator(`[data-historical-name-entry][data-function-id="${functionId}"]`)
-    .locator('.historical-name-text')
-    .filter({ hasText: new RegExp(`^${text}$`, 'i') })
-    .locator('..');
-  const detox = historicalRow('OCF-BOD-004', 'PLUS-DETOX');
-  await expect(detox).toHaveAttribute('data-historical-kind', 'former-primary');
-  await expect(detox).toHaveAttribute('data-also-current', 'true');
-  await expect(detox.locator('.historical-name-kind')).toHaveText('Former primary cue · Also current');
-  const breathe = historicalRow('OCF-BOD-009', 'Plus Breathe Better');
-  await expect(breathe).toHaveAttribute('data-historical-kind', 'former-teaching');
-  await expect(breathe).toHaveAttribute('data-also-current', 'true');
-  await expect(breathe.locator('.historical-name-kind')).toHaveText('Former teaching phrase · Also current');
-  const sleepTitle = historicalRow('OCF-SLP-005', 'Sleep Easy');
-  await expect(sleepTitle).toHaveAttribute('data-historical-kind', 'former-title');
-  await expect(sleepTitle).toHaveAttribute('data-also-current', 'true');
-  await expect(sleepTitle.locator('.historical-name-kind')).toHaveText('Former title · Also current');
-  const sleepCue = historicalRow('OCF-SLP-005', 'PLUS-SLEEP EASY');
-  await expect(sleepCue).toHaveAttribute('data-historical-kind', 'former-primary');
-  await expect(sleepCue).toHaveAttribute('data-also-current', 'true');
-  await expect(sleepCue.locator('.historical-name-kind')).toHaveText('Former primary cue · Also current');
+  await expect(page.locator('[data-historical-name-entry]')).toHaveCount(32);
+  await expect(page.locator('[data-historical-kind="former-title"]')).toHaveCount(32);
+  await expect(page.locator('[data-also-current], [data-historical-kind="former-primary"], [data-historical-kind="former-teaching"]')).toHaveCount(0);
+  await expect(page.locator('main')).not.toContainText('historical_lookup.kind');
+  await expect(page.locator('main')).not.toContainText('SHA-256');
+  await expect(page.locator('main')).not.toContainText('these 15 functions');
+  await expect(page.locator('.page-intro a[href*="../functions/"]')).toHaveCount(0);
+  for (const id of ['OCF-SLP-005', 'OCF-BOD-002', 'OCF-COG-004', 'OCF-COG-006', 'OCF-FND-004', 'OCF-FND-005', 'OCF-SLP-001', 'OCF-SLP-002']) {
+    await expect(page.locator(`[data-historical-name-entry][data-function-id="${id}"]`)).toHaveCount(0);
+  }
+  await expect(page.locator('[data-function-id="OCF-SEN-003"]')).toContainText('Sensory: Smell');
   const innerPower = page.locator('[data-historical-name-entry][data-function-id="OCF-PRF-002"]');
   await expect(innerPower).toContainText('Eight-Great');
-  await expect(innerPower).toContainText('Plus Eight Great');
+  await expect(innerPower).not.toContainText('Plus Eight Great');
   await expect(innerPower).not.toContainText('PLUS-STRONG');
+  await expect(page.locator('[data-function-id="OCF-BOD-006"] .historical-name-text')).toHaveCount(1);
   await expect(page.locator('a[href*="OCF_HISTORICAL_LOOKUP_CURRENT.md"]')).toHaveAttribute('href', /704440da8e0379cee8dfd332203bc0001c0a5f27/);
-  await expect(page.getByText('A match never selects an activation target.')).toBeVisible();
-  const unmapped = page.locator('.page-intro');
-  await expect(unmapped).toContainText('these 15 functions');
-  for (const id of ['OCF-BOD-010', 'OCF-BOD-012', 'OCF-COG-003', 'OCF-COG-006', 'OCF-COG-007', 'OCF-COM-001', 'OCF-EMO-001', 'OCF-EXP-003', 'OCF-EXP-005', 'OCF-EXP-006', 'OCF-FND-001', 'OCF-FND-006', 'OCF-PRF-001', 'OCF-PRF-005', 'OCF-PRF-006']) {
-    await expect(page.locator(`.page-intro a[href="../functions/${id}/"]`)).toHaveCount(1);
-  }
-  await expect(unmapped).toContainText('Absence from this reference does not establish that no historical counterpart exists.');
   await page.setViewportSize({ width: 375, height: 900 });
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(375);
   await noAxeViolations(page);
-
   for (const id of ['OCF-BOD-004', 'OCF-BOD-009', 'OCF-SLP-005', 'OCF-PRF-002']) {
     await page.goto(`/functions/${id}/`);
     await expect(page.locator('[data-historical-name-entry], [data-also-current]')).toHaveCount(0);
     await expect(page.locator('main')).not.toContainText('Also current');
   }
   await expect(page.locator('.spoken-cue strong')).toContainText('Plus Inner Power');
+});
+
+test('five optional starter links are compact, accessible and survive navigation back', async ({ page }) => {
+  const titles = ['Relax', 'Focus', 'Imprint', 'Recall', 'Think Fast'];
+  for (const width of [320, 375, 1280]) {
+    await page.setViewportSize({ width, height: 900 });
+    await page.goto('/');
+    const links = page.locator('.starting-practices a');
+    await expect(links).toHaveText(titles);
+    await expect(page.locator('.home-paths')).toContainText('optional starting choices—not additional prerequisites');
+    await expect(page.locator('.home-paths')).toContainText('official Human Plus preparation track');
+    expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(width);
+    for (const link of await links.all()) {
+      expect((await link.boundingBox()).height).toBeGreaterThanOrEqual(44);
+    }
+    const first = await links.first().boundingBox();
+    const second = await links.nth(1).boundingBox();
+    expect(Math.abs(first.y - second.y)).toBeLessThan(1);
+    expect(Math.abs(first.x - (await page.locator('.home-paths > h2').boundingBox()).x)).toBeLessThan(1);
+    await noAxeViolations(page);
+    await links.first().focus();
+    await page.keyboard.press('Tab');
+    await expect(links.nth(1)).toBeFocused();
+    expect(await links.nth(1).evaluate(el => getComputedStyle(el).outlineStyle)).not.toBe('none');
+    await links.filter({ hasText: 'Imprint' }).click();
+    await expect(page.locator('h1')).toHaveText('Imprint');
+    await page.goBack();
+    await expect(page.locator('.starting-practices a')).toHaveText(titles);
+    await page.locator('.starting-practices a').filter({ hasText: 'Recall' }).click();
+    await expect(page.locator('h1')).toHaveText('Recall');
+    await page.goBack();
+    await expect(page.locator('.starting-practices a')).toHaveText(titles);
+  }
 });
 
 test('related-practice directory retains all approved one-way records and their reasons', async ({ page }) => {
@@ -1257,7 +1263,7 @@ test('generated listening and all platform guides require stereo for binaural de
   expect(receipt.audio_asset_count).toBe(118);
   expect(receipt.published_releases[0].publication_manifest_sha256).toBe('48cb39bcc3dfd7f7e211b3093cd927c3a790cd9ad28d6b47faad956014c85c14');
   await page.goto('/historical-names/');
-  await expect(page.locator('[data-historical-name-entry]')).toHaveCount(43);
+  await expect(page.locator('[data-historical-name-entry]')).toHaveCount(32);
   expect(receipt.historical_name_count).toBe(94);
   await noAxeViolations(page);
 });

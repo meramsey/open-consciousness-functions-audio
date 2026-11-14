@@ -170,7 +170,11 @@
 .browse-action:focus-visible, .category-link:focus-visible { outline: 3px solid var(--focus-ring); outline-offset: 2px; }
 .category-links { display: flex; flex-wrap: wrap; gap: .5rem; margin: 1rem 0 1.5rem; }
 .category-link { display: inline-flex; flex: 0 1 auto; align-items: center; min-width: 0; max-width: 100%; min-height: 44px; padding: .4rem .75rem; border: 1px solid var(--line); border-radius: 2rem; background: var(--card); text-align: center; text-decoration: none; overflow-wrap: anywhere; }
-.starting-practices { display: flex; flex-wrap: wrap; gap: .75rem 1.5rem; padding-left: 1.25rem; margin: .5rem 0 1.5rem; }
+.home-paths .starting-practices { display: flex; flex-wrap: wrap; gap: .5rem; list-style: none; padding: 0; margin: .5rem 0 1.5rem; }
+.home-paths .starting-practices li { margin: 0; }
+.starting-practices a { display: inline-flex; align-items: center; min-height: 44px; padding: .45rem .8rem; border: 1px solid var(--line); border-radius: .35rem; background: var(--card); }
+.home-paths .path-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.home-paths .path-card h3 { margin-top: 0; }
 .preparation-note { padding: .85rem 1rem; border-left: 3px solid var(--accent); background: var(--card); color: var(--ink); }
 .source-details, .recording-details { margin-top: .75rem; }
 .source-details summary, .recording-details summary, .file-details summary { display: flex; align-items: center; min-height: 44px; cursor: pointer; font-weight: 650; }
@@ -263,6 +267,8 @@
   .path-grid, .function-grid, .relationship-grid { grid-template-columns: 1fr; }
   .path-grid { grid-template-columns: minmax(0, 1fr); }
   .path-card { min-width: 0; overflow-wrap: anywhere; }
+  .home-paths .path-grid { grid-template-columns: minmax(0, 1fr); gap: .65rem; }
+  .home-paths .path-card { padding: .8rem 1rem; }
   .historical-name-grid { grid-template-columns: 1fr; }
   .directory-filters, .reference-tools { grid-template-columns: 1fr; padding: .8rem; }
   .directory-filters output, .reference-tools output { grid-column: auto; }
