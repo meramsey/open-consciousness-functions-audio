@@ -187,6 +187,7 @@
 .static-guide-fallback .domain-group { margin-block: 2rem; }
 .home-library-preview { scroll-margin-top: 2rem; }
 .home-library-preview h2 { font: 600 clamp(1.6rem, 3vw, 2.2rem)/1.2 var(--display); }
+.home-library-preview .text-link { white-space: normal; overflow-wrap: anywhere; }
 .eyebrow { font-size: .78rem; letter-spacing: .1em; }
 .desktop-toc li, .desktop-toc .toc-level-3 { font-size: .9rem; }
 .site-footer p { font-size: .85rem; line-height: 1.55; }
