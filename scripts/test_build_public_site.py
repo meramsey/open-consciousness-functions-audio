@@ -18,6 +18,7 @@ from build_public_site import (
     _downloads_page,
     _function_audio_actions,
     _function_page,
+    _function_audio_availability,
     _functions_index,
     _home_page,
     _historical_names_page,
@@ -201,6 +202,22 @@ class PublicSiteBuildTests(unittest.TestCase):
         self.assertIn("</li><li>", rendered)
         self.assertNotIn("<p>1. ", rendered)
 
+    def test_render_markdown_keeps_wrapped_unordered_checklists_semantic(self):
+        rendered = render_markdown(
+            "## Baseline\n\n"
+            "- Stereo headphones with separate left/right playback are\n"
+            "  required for the intended channel-separated audio.\n"
+            "- Keep any accessibility settings you rely on."
+        )
+        self.assertEqual(rendered.count("<ul>"), 1)
+        self.assertEqual(rendered.count("<li>"), 2)
+        self.assertIn(
+            "Stereo headphones with separate left/right playback are required "
+            "for the intended channel-separated audio.", rendered,
+        )
+        self.assertIn("Keep any accessibility settings you rely on.", rendered)
+        self.assertNotIn("<p>- ", rendered)
+
     def test_historical_lookup_projection_uses_only_exact_source_names(self):
         import yaml
 
@@ -337,6 +354,20 @@ class PublicSiteBuildTests(unittest.TestCase):
                 self.assertTrue(_public_historical_name(
                     function_id, {"kind": kind, "text": text}
                 ))
+
+    def test_published_recording_answer_is_catalog_scoped_and_never_infers_availability(self):
+        functions = [{"function_id": "OCF-FND-001"}, {"function_id": "OCF-FND-002"}]
+        scoped = _function_audio_availability(
+            functions,
+            {"releases": [{"tag": "audio-test", "version": "0.2.0", "preparations": [{"sessions": [{}]}]}]},
+            {"OCF-FND-001": [{}], "OCF-FND-002": []},
+        )
+        self.assertIn("1 of 2 canonical function guides", scoped)
+        self.assertIn("audio-test (edition 0.2.0)", scoped)
+        self.assertIn("The 1 Preparation Learning session is listed separately", scoped)
+        absent = _function_audio_availability(functions, {"releases": []}, {})
+        self.assertIn("0 of 2 canonical function guides", absent)
+        self.assertIn("no published release in the verified catalog", absent)
 
     def test_relationship_directory_preserves_direction_and_reason_without_graph_claims(self):
         functions = [
@@ -661,27 +692,13 @@ class PublicSiteBuildTests(unittest.TestCase):
         page = _quick_reference([function], {})
         assert 'data-category="experimental foundation"' in page
 
-    def test_recommended_settings_include_loudness_and_speed_controls(self):
+    def test_recommended_settings_link_to_required_stereo_and_keep_optional_controls_distinct(self):
         content = _recommended_settings("a" * 40)
         self.assertIn("automatic loudness normalization", content)
         self.assertIn("normal playback speed (1.0x)", content)
-        self.assertIn(
-            "Stereo headphones or stereo earbuds with separate left/right playback are required for the intended binaural/channel-separated audio.",
-            content,
-        )
-        self.assertIn(
-            "Speakers, mono mixing, or a single earpiece are not equivalent delivery of that audio.",
-            content,
-        )
-        self.assertIn("no equivalent effects are promised", content)
-        self.assertLess(
-            content.index("required for the intended binaural/channel-separated audio"),
-            content.index("Optional processing preferences"),
-        )
-        self.assertLess(
-            content.index("Preserve separate left/right playback"),
-            content.index("Optional processing preferences"),
-        )
+        self.assertIn('href="#headphones-and-stereo"', content)
+        self.assertNotIn("Speakers, mono mixing, or a single earpiece", content)
+        self.assertIn("Optional processing choices are separate from the required stereo delivery.", content)
         self.assertNotIn("when the selected edition is designed", content)
 
     def test_platform_guides_all_state_required_stereo_delivery_and_accessible_alternatives(self):
