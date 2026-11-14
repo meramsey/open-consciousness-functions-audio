@@ -38,6 +38,14 @@ HISTORICAL_LOOKUP_KIND_LABELS = {
     "former-teaching": "Former teaching phrase",
     "legacy-phrase": "Legacy phrase",
 }
+
+
+def _public_historical_name(function_id, name):
+    return not (
+        function_id == "OCF-PRF-002"
+        and name.get("kind") == "former-primary"
+        and name.get("text") == "PLUS-STRONG"
+    )
 PUBLIC_DISCOVERY_STATUSES = {"canonical", "reviewed"}
 
 
@@ -580,12 +588,11 @@ def build_public_site(
         _write(
             staging / "index.html",
             _shell(
-                "Open Consciousness Functions — Audio and Guides",
+                "Open Consciousness Functions — Guided Audio and Practice Guides",
                 root_body,
                 "",
                 source_commit,
                 root=True,
-                include_catalog=True,
             ),
         )
 
@@ -593,10 +600,11 @@ def build_public_site(
         _write(
             docs_dir / "index.html",
             _shell(
-                "All OCF Functions",
-                _functions_index(functions, sessions_by_function),
+                "Browse & Listen — OCF Functions",
+                _functions_index(functions, sessions_by_function, preparation_sessions),
                 "functions",
                 source_commit,
+                include_catalog=True,
             ),
         )
         for function in functions:
@@ -742,6 +750,11 @@ def build_public_site(
                     "title": row["title"]["text"],
                     "description": _public_description(row),
                     "primary_category": row["primary_category"],
+                    "primary_category_label": next(
+                        category["label"].title()
+                        for category in row["categories"]
+                        if category["id"] == row["primary_category"]
+                    ),
                     "categories": [category["id"] for category in row["categories"]],
                     "cues": [
                         command["spoken_cue"]
@@ -911,7 +924,7 @@ def _shell(
     more_nav = [
         ("Historical names", "historical-names/", "historical-names"),
         ("Related functions", "relationships/", "relationships"),
-        ("Listen", "index.html#library", ""),
+        ("Listen", "functions/#library", ""),
         ("Downloads", "downloads/", "downloads"),
         ("About", "about/", "about"),
     ]
@@ -977,12 +990,12 @@ def _function_toc_items():
     return [
         (2, identity, label)
         for identity, label in (
-            ("overview", "Intended purpose"),
+            ("overview", "Purpose"),
             ("cues", "Cues and documented instructions"),
             ("behavior", "Lifecycle and behavior"),
             ("safety", "Precautions"),
-            ("listening", "Published audio editions"),
-            ("related", "Approved related functions"),
+            ("listening", "Listen and download"),
+            ("related", "Explore related practices"),
         )
     ]
 
@@ -1012,21 +1025,34 @@ def _render_toc(items):
 
 
 def _home_page(functions, catalog, source_commit):
-    categories = sorted(
-        {category["label"] for f in functions for category in f["categories"]}
+    categories = _unique_categories(functions)
+    category_links = "".join(
+        f'<a class="category-link" href="functions/?category={_html(item["id"])}">{_html(item["label"].title())}</a>'
+        for item in categories
     )
-    return f"""<section class="hero docs-hero"><div class="hero-copy"><p class="eyebrow">Official public documentation and audio</p><h1 id="home-title">Learn the practice.<br><em>Choose how to listen.</em></h1><p class="hero-lede">{_html(PREPARATION_FIRST_GUIDANCE)}</p><div class="hero-actions"><a class="button button-light" href="start/">Start Here <span aria-hidden="true">→</span></a><a class="button button-outline-light" href="functions/">Browse functions</a><a class="button button-outline-light" href="#library">Listen</a></div></div><div class="hero-index" aria-hidden="true">58 FUNCTIONS · {len(categories)} CANONICAL DOMAINS</div></section>
-<section class="home-paths" aria-labelledby="paths-title"><p class="eyebrow">Choose a path</p><h2 id="paths-title">Read first, listen when ready.</h2><div class="path-grid"><a class="path-card" href="start/"><span>01</span><h3>Start Here</h3><p>Preparation-first instructions and optional function exploration.</p></a><a class="path-card" href="listening/"><span>02</span><h3>Listening Guide</h3><p>Comfort, stereo playback, accessibility and device settings.</p></a><a class="path-card" href="quick-reference/"><span>03</span><h3>Quick Reference</h3><p>Find function titles and current spoken cues.</p></a></div></section>
-<section class="release-banner" id="releases" aria-labelledby="release-title"><div class="release-symbol" aria-hidden="true">↗</div><div><p class="eyebrow">Verified release catalog</p><h2 id="release-title">Loading published editions.</h2><p id="release-description">Release files and checksums are read from the verified catalog.</p></div><a class="text-link" href="https://github.com/ocfproject-org/open-consciousness-functions-audio/releases">All releases <span aria-hidden="true">↗</span></a></section>
-<section class="library-section" id="library" aria-labelledby="library-title"><div class="section-heading"><div><p class="eyebrow">Published editions</p><h2 id="library-title">Listen to available sessions</h2></div><span class="count" id="release-count">Loading verified releases</span></div><p class="section-intro">Function documentation is available independently of audio. Each listed edition retains its release file URLs and checksums.</p><div class="library-tools"><label class="sr-only" for="search">Search sessions by function, cue, tag or use</label><input id="search" type="search" placeholder="Search functions, cues, tags or uses" aria-describedby="results-count"><label for="language-filter">Language <select id="language-filter"><option value="">All languages</option></select></label><label for="voice-filter">Voice <select id="voice-filter"><option value="">All voices</option></select></label><button id="clear-library-filters" type="button" hidden>Clear filters</button></div><div class="empty-state" id="empty-state" role="status"><span class="empty-icon" aria-hidden="true">◌</span><h3>No published audio editions are available in the verified catalog.</h3><p>Documentation remains available in the function library.</p></div><p id="results-count" role="status"></p><p id="catalog-no-results" class="filter-empty" hidden>No session editions match these filters.</p><div class="selection-tools"><span id="selection-count" role="status" aria-live="polite" tabindex="-1">0 files selected</span><button id="download-selection" disabled>Save download list</button><button id="playlist-selection" disabled>Save MP3 playlist</button><details id="selected-files-review" hidden><summary id="selected-files-summary">Review selected files (0)</summary><ul id="selected-files-list"></ul><button id="clear-selection" type="button">Clear selected files</button></details><p>Selections contain links and checksums; the source files remain individual published release assets.</p></div><div id="catalog-results"></div><div id="release-extras"></div></section>
-<section class="home-about"><p class="eyebrow">Open source. Independent by design.</p><p>Function documentation comes from canonical OCF locale resources. Audio availability and download checksums come from verified published release manifests. A published recording's transcript is edition-matched; current function guidance is not a substitute for it.</p><a class="text-link" href="about/">About this library <span aria-hidden="true">→</span></a></section>"""
+    starting = {row["function_id"]: row for row in functions}
+    starting_links = "".join(
+        f'<li><a href="functions/{fid}/">{_html(starting[fid]["title"]["text"])}</a></li>'
+        for fid in ("OCF-FND-004", "OCF-FND-002", "OCF-COG-007")
+        if fid in starting
+    )
+    session_count = sum(
+        len(group["sessions"])
+        for release in catalog["releases"]
+        for group in release["functions"] + release.get("preparations", [])
+    )
+    return f'''<section class="hero docs-hero"><div class="hero-copy"><p class="eyebrow">Guided practices and function guides</p><h1 id="home-title">Read the guide.<br><em>Choose how to listen.</em></h1><p class="hero-lede">Read a function’s instructions, browse current spoken cues, or listen to and download an available recording.</p><div class="hero-actions"><a class="button button-light" href="start/">Start Here <span aria-hidden="true">→</span></a><a class="button button-outline-light" href="functions/">Browse &amp; Listen</a></div></div><div class="hero-index" aria-hidden="true">{len(functions)} FUNCTION GUIDES · {session_count} PUBLISHED SESSIONS</div></section>
+<section class="home-paths" aria-labelledby="paths-title"><p class="eyebrow">First steps</p><h2 id="paths-title">Preparation first; then explore by choice.</h2><p class="preparation-note">{_html(PREPARATION_FIRST_GUIDANCE)}</p><p>After Preparation Learning, these practices are optional starting choices—not additional prerequisites:</p><ul class="starting-practices">{starting_links}</ul><div class="path-grid"><a class="path-card" href="start/"><h3>Start Here</h3><p>Preparation instructions, the exception, and choosing a first practice.</p></a><a class="path-card" href="functions/"><h3>Browse &amp; Listen</h3><p>Search practices, compare categories, and open available recordings.</p></a></div><p class="home-utilities">Also available: <a href="quick-reference/">Quick Reference for current spoken cues</a> · <a href="listening/">Detailed Listening Guide</a></p></section>
+<section class="home-library-preview" id="library" aria-labelledby="home-library-title"><span id="releases"></span><p class="eyebrow">Explore all {len(functions)} guides</p><h2 id="home-library-title">Browse by category</h2><nav class="category-links" aria-label="Browse categories">{category_links}</nav><p><a class="text-link" href="functions/">Open Browse &amp; Listen</a> · <a href="quick-reference/">Quick Reference</a> · <a href="downloads/">Individual downloads</a></p></section>
+<section class="home-about"><p class="eyebrow">Open-source and independent</p><p>OCF offers written function guides and a library of individually downloadable recordings. Audio availability is release-specific; the guide remains available independently.</p><a class="text-link" href="about/">About OCF</a></section>'''
 
 
-def _functions_index(functions, sessions_by_function):
+def _functions_index(functions, sessions_by_function, preparation_sessions):
+    category_options = _unique_categories(functions)
     options = "".join(
-        f'<option value="{_html(category["id"])}">{_html(category["label"])}</option>'
-        for category in _unique_categories(functions)
-    )
+        f'<option value="{_html(category["id"])}">{_html(category["label"].title())}</option>'
+        for category in category_options
+    ) + '<option value="preparation-learning">Preparation Learning</option>'
     languages = sorted(
         {
             session["session"].get("locale", "")
@@ -1048,6 +1074,23 @@ def _functions_index(functions, sessions_by_function):
     )
     voice_options = "".join(
         f'<option value="{_html(value)}">{_html(value)}</option>' for value in voices
+    )
+    session_count = sum(len(rows) for rows in sessions_by_function.values()) + len(preparation_sessions)
+    availability = {bool(sessions_by_function.get(function["function_id"])) for function in functions}
+    audio_filter = (
+        '<label for="audio-filter">Audio availability</label><select id="audio-filter"><option value="">All documentation</option><option value="yes">Published audio available</option><option value="no">Documentation only</option></select>'
+        if len(availability) > 1
+        else ""
+    )
+    language_filter = (
+        f'<label for="language-filter">Language</label><select id="language-filter"><option value="">All languages</option>{language_options}</select>'
+        if len(languages) > 1
+        else ""
+    )
+    voice_filter = (
+        f'<label for="voice-filter">Voice</label><select id="voice-filter"><option value="">All voices</option>{voice_options}</select>'
+        if len(voices) > 1
+        else ""
     )
     cards_by_domain = {}
     for function in functions:
@@ -1075,15 +1118,32 @@ def _functions_index(functions, sessions_by_function):
         function_voices = sorted(
             {row["session"].get("voice_name", "") for row in sessions}
         )
+        editions = []
+        for row in sessions:
+            session = row["session"]
+            actions = [
+                f'<a class="browse-action" href="{_html(function["function_id"])}/#{_session_anchor(row)}" aria-label="Listen to {_html(session.get("title") or function["title"]["text"])}, edition {_html(session["edition"])}">Listen</a>'
+            ]
+            actions.extend(
+                f'<a class="browse-action" href="{_html(asset["download_url"])}" aria-label="Download {str(asset["format"]).upper()} for {_html(session.get("title") or function["title"]["text"])}, edition {_html(session["edition"])}">{str(asset["format"]).upper()}</a>'
+                for asset in row["audio_assets"]
+            )
+            editions.append(
+                f'<div class="browse-edition" role="group" aria-label="Edition {_html(session["edition"])}"><span>Edition {_html(session["edition"])}</span>{"".join(actions)}</div>'
+            )
+        sessions_text = " ".join(
+            f'{row["session"].get("locale", "")} {row["session"].get("voice_name", "")}'
+            for row in sessions
+        )
         cards_by_domain.setdefault(function["primary_category"], []).append(
-            f'''<article class="function-card" data-function-card data-category="{_html(" ".join(sorted(categories)))}" data-audio="{"yes" if sessions else "no"}" data-language="{_html("|".join(function_languages))}" data-voice="{_html("|".join(function_voices))}" data-search="{_html(" ".join(search).casefold())}"><p class="eyebrow">{_html(function["primary_category"])} · {function["function_id"]}</p><h2><a href="{_html(function["function_id"])}/">{_html(function["title"]["text"])}</a></h2><p>{_html(_public_description(function))}</p><p class="function-status">Documentation available · {"Published audio available" if sessions else "No published audio in current catalog"}</p><a class="text-link" href="{_html(function["function_id"])}/">Read documented instructions <span aria-hidden="true">→</span></a></article>'''
+            f'''<article class="function-card" data-function-card data-category="{_html(" ".join(sorted(categories)))}" data-audio="{"yes" if sessions else "no"}" data-language="{_html("|".join(function_languages))}" data-voice="{_html("|".join(function_voices))}" data-search="{_html(" ".join(search + [sessions_text]).casefold())}"><p class="eyebrow">{_html(function["primary_category"].title())} · {function["function_id"]}</p><h2><a href="{_html(function["function_id"])}/">{_html(function["title"]["text"])}</a></h2><p>{_html(_public_description(function))}</p><p class="function-status">{"Published recording available" if sessions else "Function guide · no recording in the current release"}</p><div class="browse-editions">{"".join(editions) if editions else ""}</div><a class="text-link" href="{_html(function["function_id"])}/">Read instructions <span aria-hidden="true">→</span></a></article>'''
         )
     groups = "".join(
-        f'<section class="domain-group" data-domain-group="{_html(category["id"])}"><h2>{_html(category["label"])}</h2><div class="function-grid" data-function-grid>{"".join(cards_by_domain.get(category["id"], []))}</div></section>'
-        for category in _unique_categories(functions)
+        f'<section class="domain-group" data-domain-group="{_html(category["id"])}"><h2>{_html(category["label"].title())}</h2><div class="function-grid" data-function-grid>{"".join(cards_by_domain.get(category["id"], []))}</div></section>'
+        for category in category_options
         if cards_by_domain.get(category["id"])
     )
-    return f"""<header class="page-intro"><p class="eyebrow">Canonical documentation directory</p><h1>All 58 OCF functions</h1><p>Documentation is listed independently from audio availability. Functions are grouped by their canonical primary domain; secondary domains remain available in filters and on each guide.</p></header><form class="directory-filters" role="search"><label for="function-search">Search title, ID, description or spoken cue</label><input id="function-search" type="search" data-function-search placeholder="Try a title, spoken cue or function ID"><label for="category-filter">Canonical domain</label><select id="category-filter" data-category-filter><option value="">All domains</option>{options}</select><label for="audio-filter">Audio availability</label><select id="audio-filter" data-audio-filter><option value="">All documentation</option><option value="yes">Published audio available</option><option value="no">Documentation only</option></select><label for="language-filter">Audio language</label><select id="language-filter" data-directory-language><option value="">All languages</option>{language_options}</select><label for="voice-filter">Audio voice</label><select id="voice-filter" data-directory-voice><option value="">All voices</option>{voice_options}</select><output data-directory-count aria-live="polite">58 functions</output><button type="button" data-function-clear hidden>Clear filters</button><p class="filter-empty" data-function-no-results role="status" hidden>No functions match these filters.</p></form>{groups}<noscript><p>Search and filters require JavaScript. Every function remains listed below.</p></noscript>"""
+    return f'''<header class="page-intro"><p class="eyebrow">Find a guide, then choose how to listen</p><h1>Browse &amp; Listen</h1><p>Search all {len(functions)} function guides by title, current spoken cue, category, or purpose. Each recording retains its original release files.</p><p class="preparation-note">{_html(PREPARATION_FIRST_GUIDANCE)} <a href="../preparation-learning/">Open Preparation Learning</a></p></header><section class="library-section browse-library" id="library" aria-labelledby="library-title"><div class="section-heading"><div><p class="eyebrow">Published editions and all function guides</p><h2 id="library-title">Find a practice</h2></div><span class="count" id="release-count">{session_count} recordings</span></div><p>Function guides remain available independently of audio.</p><div class="library-tools"><label class="sr-only" for="search">Search title, ID, description, current spoken cue, category, or use</label><input id="search" type="search" placeholder="Search functions, cues, categories, or uses" aria-describedby="results-count"><label for="category-filter">Category <select id="category-filter"><option value="">All categories</option>{options}</select></label>{audio_filter}{language_filter}{voice_filter}<button id="clear-library-filters" type="button" hidden>Clear filters</button></div><section class="release-banner browse-banner" aria-labelledby="release-title"><div class="release-symbol" aria-hidden="true">↗</div><div><p class="eyebrow">Published audio</p><h2 id="release-title">{session_count} session editions are listed</h2><p id="release-description">Search by practice and category. Open a function guide to read, listen, or download its original edition.</p></div><a class="text-link" href="https://github.com/ocfproject-org/open-consciousness-functions-audio/releases">All releases <span aria-hidden="true">↗</span></a></section><p id="empty-state" class="empty-state" role="status" hidden>No published recordings are listed in the verified catalog; function guides remain available.</p><p id="results-count" role="status" aria-live="polite">Loading audio details. Function guides remain available below.</p><p id="catalog-no-results" class="filter-empty" hidden>No functions match these filters.</p><div class="selection-tools"><span id="selection-count" role="status" aria-live="polite" tabindex="-1">0 files selected</span><button id="download-selection" disabled>Save download list</button><button id="playlist-selection" disabled>Save MP3 playlist</button><details id="selected-files-review" hidden><summary id="selected-files-summary">Review selected files (0)</summary><ul id="selected-files-list"></ul><button id="clear-selection" type="button">Clear selected files</button></details><p>Downloads open the original release assets. Detailed filenames, versions, and checksums are on each function guide.</p></div><div id="catalog-results">{groups}</div><div id="release-extras"></div></section><noscript><p>Search and player controls need JavaScript. Function guides and individual download links remain available above.</p></noscript>'''
 
 
 def _unique_categories(functions):
@@ -1193,6 +1253,8 @@ def _historical_lookup_rows(markdown, functions, source_root):
                 kind in HISTORICAL_LOOKUP_KIND_LABELS,
                 f"historical lookup classification is unknown: {function_id} / {kind}",
             )
+            if not _public_historical_name(function_id, name):
+                continue
             also_current = _historical_lookup_form(name["text"]) in current_terms
             label = HISTORICAL_LOOKUP_KIND_LABELS[kind]
             if also_current:
@@ -1350,16 +1412,19 @@ def _function_page(function, sessions, transcript_paths, source_commit):
     related = []
     for relation in function["related_functions"]:
         related.append(
-            f'<li><a href="../{_html(relation["function_id"])}/">{_html(relation["title"])} — {_html(relation["function_id"])}</a> <span class="relation-kind">{_html(relation["relationship_type"])}, optional and directional</span><p>{_html(relation["description"])}</p></li>'
+            f'<li><a href="../{_html(relation["function_id"])}/">{_html(relation["title"])}</a> <span class="stable-id">{_html(relation["function_id"])}</span><p>{_html(relation["description"])}</p></li>'
         )
     related_html = (
         "".join(related)
-        or "<li>No approved related-function link is declared. This does not prevent independent choice.</li>"
+        or "<li>No related practice is listed for this function. You can still choose it independently.</li>"
     )
-    breadcrumb = f'<nav class="breadcrumbs" aria-label="Breadcrumb"><a href="../../">Home</a> / <a href="../">Functions</a> / <span aria-current="page">{_html(function["title"]["text"])}</span></nav>'
+    breadcrumb = f'<nav class="breadcrumbs" aria-label="Breadcrumb"><a href="../../">Home</a> / <a href="../">Browse &amp; Listen</a> / <span aria-current="page">{_html(function["title"]["text"])}</span></nav>'
+    source_details = (
+        f'<details class="source-details"><summary>Sources and versions</summary><p>Canonical function source: <a href="{SOURCE_REPOSITORY}/tree/{source_commit}/{_html(function["canonical_resource"])}">locale resource at pinned commit {_html(source_commit[:12])}</a>.</p></details>'
+    )
     return (
         breadcrumb
-        + f'''<header class="page-intro" data-function-id="{_html(function["function_id"])}"><p class="eyebrow">{_html(function["function_id"])} · {_html(categories)}</p><h1>{_html(function["title"]["text"])}</h1>{audio_actions}<p class="lead">{_html(_public_description(function))}</p></header><section class="guide-section"><h2 id="overview">Intended purpose</h2><p>{_html(_public_description(function))}</p>{terms}<p class="source-link">Canonical function source: <a href="{SOURCE_REPOSITORY}/tree/{source_commit}/{_html(function["canonical_resource"])}">this locale resource at pinned commit {source_commit[:12]}</a>.</p></section><section class="guide-section"><h2 id="cues">Cues and documented instructions</h2>{"".join(command_sections)}</section>{lifecycle_html}{safety}<section class="guide-section"><h2 id="listening">Published audio editions</h2><p>Audio availability, voice and transcript are edition-specific. Only release-manifest assets are listed here.</p>{session_html}</section><section class="guide-section"><h2 id="related">Approved related functions</h2><ul class="relationship-list">{related_html}</ul><p>These links are optional and directional. They are not prerequisites or claims of combined effect.</p></section>'''
+        + f'''<header class="page-intro function-intro" data-function-id="{_html(function["function_id"])}"><p class="eyebrow">{_html(function["function_id"])} · {_html(categories)}</p><h1>{_html(function["title"]["text"])}</h1><p id="overview" class="lead">{_html(_public_description(function))}</p>{audio_actions}</header>{terms}<section class="guide-section"><h2 id="cues">Cues and documented instructions</h2>{"".join(command_sections)}</section>{lifecycle_html}{safety}<section class="guide-section"><h2 id="listening">Listen and download</h2><p>Choose an edition. The written instructions are available whether or not you use audio. Release downloads open the original files; some browsers may use the server filename, so rename it locally if needed. This page does not buffer audio.</p>{session_html}</section><section class="guide-section"><h2 id="related">Explore related practices</h2><p>These source-approved links are optional, one-way relationships. They are not prerequisites or claims about combining practices.</p><ul class="relationship-list">{related_html}</ul></section>{source_details}'''
     )
 
 
@@ -1451,7 +1516,7 @@ def _session_card(row, transcript_paths, *, site_root_prefix="../../"):
         )
         specification_text = _asset_specification(asset, size=size, duration=duration)
         audio.append(
-            f'''<div class="asset-download" data-download-format="{_html(asset["format"])}"><div class="download-actions"><a class="download-link" href="{_html(asset["download_url"])}" download="{_html(suggested_filename)}">Download {fmt}</a><button type="button" class="copy-filename" data-copy="{_html(suggested_filename)}" aria-label="Copy name: {_html(suggested_filename)}">Copy name</button></div><p class="download-specification">{_html(specification_text)}</p><p class="download-name-note">Suggested local filename: <code>{_html(suggested_filename)}</code>. The release server may use its own filename; if so, rename the downloaded file locally. Audio is downloaded directly and is not buffered by this page.</p><details><summary>Checksum</summary><code>{_html(asset["sha256"])}</code></details></div>'''
+            f'''<div class="asset-download" data-download-format="{_html(asset["format"])}"><div class="download-actions"><a class="download-link" href="{_html(asset["download_url"])}" download="{_html(suggested_filename)}">Download {fmt}</a></div><p class="download-specification">{_html(specification_text)}</p><details class="file-details"><summary>File details</summary><p>Release filename: <code>{_html(asset["filename"])}</code></p><p>Suggested local filename: <code>{_html(suggested_filename)}</code></p><button type="button" class="copy-filename" data-copy="{_html(suggested_filename)}" aria-label="Copy suggested filename for {fmt}">Copy suggested filename</button><p>SHA-256: <code>{_html(asset["sha256"])}</code></p></details></div>'''
         )
     transcript_controls = []
     for fmt, label in (("txt", "Read transcript"), ("vtt", "Download timed subtitles")):
@@ -1461,7 +1526,7 @@ def _session_card(row, transcript_paths, *, site_root_prefix="../../"):
         local = transcript_paths.get(asset["asset_id"])
         if fmt == "txt" and local:
             transcript_controls.append(
-                f'<details class="transcript" data-transcript><summary>{label} — edition {_html(session["edition"])} ({_html(session["locale"])})</summary><label class="transcript-search"><span>Search this transcript</span><input type="search" data-transcript-search disabled></label><pre class="transcript-body" data-transcript-src="{_html(site_root_prefix + local["path"])}" aria-live="polite">Transcript loads when expanded.</pre><p><a href="{_html(site_root_prefix + local["path"])}" download>Download transcript text</a> · <a href="{_html(asset["download_url"])}">Original release asset</a> · SHA-256 <code>{_html(asset["sha256"])}</code></p></details>'
+                f'<details class="transcript" data-transcript><summary>{label} — edition {_html(session["edition"])} ({_html(session["locale"])})</summary><label class="transcript-search"><span>Search this transcript</span><input type="search" data-transcript-search disabled></label><pre class="transcript-body" data-transcript-src="{_html(site_root_prefix + local["path"])}" aria-live="polite">Transcript loads when expanded.</pre><p><a href="{_html(site_root_prefix + local["path"])}" download>Download transcript text</a> · <a href="{_html(asset["download_url"])}">Original release asset</a></p><details class="file-details"><summary>Transcript file details</summary><p>SHA-256: <code>{_html(asset["sha256"])}</code></p></details></details>'
             )
         elif local:
             transcript_controls.append(
@@ -1483,7 +1548,8 @@ def _session_card(row, transcript_paths, *, site_root_prefix="../../"):
     )
     audio_html = "".join(audio)
     transcript_html = "".join(transcript_controls)
-    return f'''<article class="edition-card" id="{_session_anchor(row)}"><div class="edition-heading">{artwork}<div><h3>{_html(title)}</h3><p>{_html(session["locale"])} · {_html(session["voice_name"])} · edition {_html(session["edition"])}</p><p>Published release <a href="{_html(release["release_url"])}">{_html(release["tag"])}</a> · source audio commit {_html(release["source_ocf_commit"][:12])}</p></div></div>{audio_html}{transcript_html}{companion_html}</article>'''
+    source_info = f'<details class="recording-details"><summary>Recording source and version</summary><p>Published release <a href="{_html(release["release_url"])}">{_html(release["tag"])}</a></p><p>Source OCF commit: <code>{_html(release["source_ocf_commit"])}</code></p></details>'
+    return f'''<article class="edition-card" id="{_session_anchor(row)}"><div class="edition-heading">{artwork}<div><h3>{_html(title)}</h3><p>{_html(session["locale"])} · {_html(session["voice_name"])} · edition {_html(session["edition"])}</p>{source_info}</div></div>{audio_html}{transcript_html}{companion_html}</article>'''
 
 
 def _asset_specification(asset, *, size=None, duration=None):
@@ -1626,13 +1692,18 @@ def _historical_names_page(
 
 
 def _relationships_page(functions):
-    links = []
+    links_by_category = {}
     for function in functions:
         for relation in function["related_functions"]:
-            links.append(
-                f'<article class="relationship-card"><p class="eyebrow">{_html(relation["relationship_type"])} · optional · outgoing from {_html(function["function_id"])}</p><h2><a href="../functions/{_html(function["function_id"])}/">{_html(function["title"]["text"])}</a> → <a href="../functions/{_html(relation["function_id"])}/">{_html(relation["title"])}</a></h2><p>{_html(relation["description"])}</p></article>'
+            links_by_category.setdefault(function["primary_category"], []).append(
+                f'<article class="relationship-card"><p class="eyebrow">From {_html(function["function_id"])}</p><h3><a href="../functions/{_html(function["function_id"])}/">{_html(function["title"]["text"])}</a> <span aria-hidden="true">→</span> <a href="../functions/{_html(relation["function_id"])}/">{_html(relation["title"])}</a></h3><p>{_html(relation["description"])}</p></article>'
             )
-    return f'<header class="page-intro"><p class="eyebrow">Canonical approved links only</p><h1>Related functions</h1><p>These 33 relationships are optional and directional. No reverse links, prerequisites, stacking instructions, or proven synergies are inferred.</p></header><div class="relationship-grid">{"".join(links)}</div>'
+    groups = "".join(
+        f'<section class="relationship-group"><h2>{_html(category.title())}</h2><div class="relationship-grid">{"".join(cards)}</div></section>'
+        for category, cards in links_by_category.items()
+    )
+    relation_count = sum(len(cards) for cards in links_by_category.values())
+    return f'<header class="page-intro"><p class="eyebrow">Source-approved relationships</p><h1>Explore related practices</h1><p>These {relation_count} links are optional and one-way. They are not prerequisites, sequences, or claims of combined effects.</p></header>{groups}'
 
 
 def _downloads_page(catalog, preparation_sessions):
